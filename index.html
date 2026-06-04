@@ -111,7 +111,15 @@
       treasury: { openingBalance: 0, transactions: [] },
       knowledge: [],
       channels: [],
-      settings: { companyName: 'مزرعتي', language: 'ar' }
+      settings: { companyName: 'مزرعتي', language: 'ar' },
+      cropTemplates: {
+        'فراولة': [
+          { day: 0, operation: 'حرث وتجهيز الأرض', cost: 200 },
+          { day: 15, operation: 'زراعة الشتلات', cost: 3000 },
+          { day: 60, operation: 'تسميد', cost: 400 },
+          { day: 120, operation: 'حصاد', cost: 500 }
+        ]
+      }
     };
 
     // ======================== دوال المحاسبة المركزية ========================
@@ -222,9 +230,9 @@
       saveData();
     }
 
-    function saveData() { localStorage.setItem('agrios_v17', JSON.stringify(AppData)); }
+    function saveData() { localStorage.setItem('agrios_v18', JSON.stringify(AppData)); }
     function loadData() {
-      const raw = localStorage.getItem('agrios_v17');
+      const raw = localStorage.getItem('agrios_v18');
       if (raw) Object.assign(AppData, JSON.parse(raw));
       else {
         addSubAccount('2310', 'علي أحمد', 'موظف');
@@ -292,40 +300,40 @@
       const t = document.getElementById('toast');
       t.textContent = msg; t.classList.add('show');
       setTimeout(() => t.classList.remove('show'), 2500);
-    }
+    }function renderDashboard(el) {
+  const totalTasks = AppData.tasks.length;
+  const doneTasks = AppData.tasks.filter(t => t.done).length;
+  const totalBudget = AppData.projects.reduce((s, p) => s + p.budget, 0);
+  const totalSpent = AppData.projects.reduce((s, p) => s + p.phases.reduce((ps, ph) => ps + ph.spent, 0), 0);
+  const schedulePercent = totalTasks ? Math.round((doneTasks / totalTasks) * 100) : 100;
+  const budgetRemaining = totalBudget ? Math.round(((totalBudget - totalSpent) / totalBudget) * 100) : 100;
+  const treasuryBalance = getTreasuryBalance();
+  const today = new Date().toISOString().split('T')[0];
+  const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const dueToday = AppData.checks.filter(c => c.status === 'مستحق' && c.dueDate <= today);
+  const dueSoon = AppData.checks.filter(c => c.status === 'مستحق' && c.dueDate > today && c.dueDate <= nextWeek);
+  const totalReceivables = AppData.journalEntries.filter(j => j.debit.startsWith('1230')).reduce((s, j) => s + j.amount, 0) - AppData.journalEntries.filter(j => j.credit.startsWith('1230')).reduce((s, j) => s + j.amount, 0);
+  const totalPayables = AppData.journalEntries.filter(j => j.credit.startsWith('2210')).reduce((s, j) => s + j.amount, 0) - AppData.journalEntries.filter(j => j.debit.startsWith('2210')).reduce((s, j) => s + j.amount, 0);
+  const liquidityRatio = totalPayables > 0 ? (treasuryBalance / totalPayables).toFixed(2) : '∞';
 
-    function renderDashboard(el) {
-      const totalTasks = AppData.tasks.length;
-      const doneTasks = AppData.tasks.filter(t => t.done).length;
-      const totalBudget = AppData.projects.reduce((s, p) => s + p.budget, 0);
-      const totalSpent = AppData.projects.reduce((s, p) => s + p.phases.reduce((ps, ph) => ps + ph.spent, 0), 0);
-      const schedulePercent = totalTasks ? Math.round((doneTasks / totalTasks) * 100) : 100;
-      const budgetRemaining = totalBudget ? Math.round(((totalBudget - totalSpent) / totalBudget) * 100) : 100;
-      const treasuryBalance = getTreasuryBalance();
-      const today = new Date().toISOString().split('T')[0];
-      const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      const dueToday = AppData.checks.filter(c => c.status === 'مستحق' && c.dueDate <= today);
-      const dueSoon = AppData.checks.filter(c => c.status === 'مستحق' && c.dueDate > today && c.dueDate <= nextWeek);
-      const totalReceivables = AppData.journalEntries.filter(j => j.debit.startsWith('1230')).reduce((s, j) => s + j.amount, 0) - AppData.journalEntries.filter(j => j.credit.startsWith('1230')).reduce((s, j) => s + j.amount, 0);
-      const totalPayables = AppData.journalEntries.filter(j => j.credit.startsWith('2210')).reduce((s, j) => s + j.amount, 0) - AppData.journalEntries.filter(j => j.debit.startsWith('2210')).reduce((s, j) => s + j.amount, 0);
-      const liquidityRatio = totalPayables > 0 ? (treasuryBalance / totalPayables).toFixed(2) : '∞';
+  el.innerHTML = `<h2>لوحة القيادة</h2>
+    <div class="grid-3">
+      <div class="card"><h3>💰 الخزينة</h3><p style="font-size:24px;">${treasuryBalance.toFixed(2)} $</p></div>
+      <div class="card"><h3>📊 تقدم المهام</h3><p>${schedulePercent}% (${doneTasks}/${totalTasks})</p></div>
+      <div class="card"><h3>📋 المشاريع</h3><p>${AppData.projects.length} مشروع</p></div>
+      <div class="card"><h3>🏦 البنوك</h3><p>${AppData.banks.length} حساب</p></div>
+      <div class="card"><h3>⚠️ شيكات اليوم</h3><p style="color:${dueToday.length ? 'red' : 'green'}">${dueToday.length} شيك</p></div>
+      <div class="card"><h3>⏰ شيكات قريبة</h3><p style="color:${dueSoon.length ? 'orange' : 'green'}">${dueSoon.length} شيك خلال 7 أيام</p></div>
+      <div class="card"><h3>📊 نسبة استخدام الميزانية</h3><p style="font-size:20px;">${budgetRemaining}%</p></div>
+      <div class="card"><h3>💳 الذمم المدينة</h3><p style="font-size:20px;">${totalReceivables.toFixed(2)} $</p></div>
+      <div class="card"><h3>📋 الذمم الدائنة</h3><p style="font-size:20px;">${totalPayables.toFixed(2)} $</p></div>
+      <div class="card"><h3>🔍 نسبة السيولة</h3><p style="font-size:20px;">${liquidityRatio}</p></div>
+    </div>
+    ${dueToday.length > 0 ? `<div class="card" style="background:#ffebee;"><h3>🚨 شيكات مستحقة اليوم</h3><table>${dueToday.map(c => `<tr><td>${c.checkNumber}</td><td>${c.type}</td><td>${c.amount} $</td></tr>`).join('')}</table></div>` : ''}
+    ${dueSoon.length > 0 ? `<div class="card" style="background:#fff8e1;"><h3>📅 شيكات تستحق قريباً</h3><table>${dueSoon.map(c => `<tr><td>${c.checkNumber}</td><td>${c.type}</td><td>${c.amount} $</td><td>${c.dueDate}</td></tr>`).join('')}</table></div>` : ''}`;
+}
 
-      el.innerHTML = `<h2>لوحة القيادة</h2>
-        <div class="grid-3">
-          <div class="card"><h3>💰 الخزينة</h3><p style="font-size:24px;">${treasuryBalance.toFixed(2)} $</p></div>
-          <div class="card"><h3>📊 تقدم المهام</h3><p>${schedulePercent}% (${doneTasks}/${totalTasks})</p></div>
-          <div class="card"><h3>📋 المشاريع</h3><p>${AppData.projects.length} مشروع</p></div>
-          <div class="card"><h3>🏦 البنوك</h3><p>${AppData.banks.length} حساب</p></div>
-          <div class="card"><h3>⚠️ شيكات اليوم</h3><p style="color:${dueToday.length ? 'red' : 'green'}">${dueToday.length} شيك</p></div>
-          <div class="card"><h3>⏰ شيكات قريبة</h3><p style="color:${dueSoon.length ? 'orange' : 'green'}">${dueSoon.length} شيك خلال 7 أيام</p></div>
-          <div class="card"><h3>📊 نسبة استخدام الميزانية</h3><p style="font-size:20px;">${budgetRemaining}%</p></div>
-          <div class="card"><h3>💳 الذمم المدينة</h3><p style="font-size:20px;">${totalReceivables.toFixed(2)} $</p></div>
-          <div class="card"><h3>📋 الذمم الدائنة</h3><p style="font-size:20px;">${totalPayables.toFixed(2)} $</p></div>
-          <div class="card"><h3>🔍 نسبة السيولة</h3><p style="font-size:20px;">${liquidityRatio}</p></div>
-        </div>
-        ${dueToday.length > 0 ? `<div class="card" style="background:#ffebee;"><h3>🚨 شيكات مستحقة اليوم</h3><table>${dueToday.map(c => `<tr><td>${c.checkNumber}</td><td>${c.type}</td><td>${c.amount} $</td></tr>`).join('')}</table></div>` : ''}
-        ${dueSoon.length > 0 ? `<div class="card" style="background:#fff8e1;"><h3>📅 شيكات تستحق قريباً</h3><table>${dueSoon.map(c => `<tr><td>${c.checkNumber}</td><td>${c.type}</td><td>${c.amount} $</td><td>${c.dueDate}</td></tr>`).join('')}</table></div>` : ''}`;
-    }// ======================== الخزينة (مركز العمليات اليومية) ========================
+// ======================== الخزينة (مركز العمليات اليومية) ========================
 function renderTreasury(el) {
   const balance = getTreasuryBalance();
   const today = new Date().toISOString().split('T')[0];
@@ -585,7 +593,7 @@ function completeTask(taskId) {
 
 function deleteTask(id) { if (!confirm('حذف المهمة؟')) return; AppData.tasks = AppData.tasks.filter(t => t.id !== id); saveData(); renderContent(); showToast('تم الحذف'); }
 
-// ======================== الروزنامة ========================
+// ======================== الروزنامة (محدثة – تدعم جميع المحاصيل) ========================
 function renderCalendar(el) {
   el.innerHTML = `<h2>الروزنامة</h2><button onclick="openModal('calendar')">➕ روزنامة جديدة</button><div id="calList"></div>`;
   document.getElementById('calList').innerHTML = AppData.calendarEntries.map(entry => {
@@ -961,14 +969,6 @@ function applyReportFilter() {
   }
 }
 
-function matchItemDate(item) {
-  const itemDate = item.date || item.dueDate || item.startDate || item.plantDate || item.createdAt || '';
-  if (!itemDate) return !from && !to;
-  if (from && itemDate < from) return false;
-  if (to && itemDate > to) return false;
-  return true;
-}
-
 function printReport() {
   const content = document.getElementById('reportResults').innerHTML;
   const win = window.open('', '', 'width=800,height=600');
@@ -1009,7 +1009,13 @@ function openModal(type, id = null) {
     const project = AppData.projects.find(p => p.id === (t?.projectId || window.selectedProjectId));
     html = `<h3>${id?'تعديل مهمة':'مهمة جديدة'}</h3><input id="taskTitle" placeholder="وصف المهمة" value="${t?.title||''}"><input id="taskCost" type="number" value="${t?.cost||''}"><select id="taskProject"><option value="">بدون مشروع</option>${AppData.projects.map(p=>`<option value="${p.id}" ${(t?.projectId||window.selectedProjectId)===p.id?'selected':''}>${p.name}</option>`).join('')}</select><select id="taskPhase"><option value="">بدون مرحلة</option>${project?project.phases.map(ph=>`<option value="${ph.id}" ${t?.phaseId===ph.id?'selected':''}>${ph.name}</option>`).join(''):''}</select><select id="taskEmployee"><option value="">بدون موظف</option>${AppData.personnel.map(e=>`<option value="${e.id}" ${t?.personId===e.id?'selected':''}>${e.name}</option>`).join('')}</select><input id="taskDate" type="date" value="${t?.date||''}"><input type="hidden" id="editId" value="${id||''}"><button onclick="saveTask()">حفظ</button>`;
   } else if (type === 'calendar') {
-    html = `<h3>روزنامة جديدة</h3><select id="calProject">${AppData.projects.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</select><input id="calArea" placeholder="المساحة"><input id="calPlantDate" type="date"><button onclick="saveCalendar()">توليد</button>`;
+    html = `<h3>روزنامة جديدة</h3>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <select id="calCropSelect" style="flex:1;">${Object.keys(AppData.cropTemplates).map(c => `<option value="${c}">${c}</option>`).join('')}</select>
+        <button type="button" onclick="openNewCropModal()" style="width:auto; white-space:nowrap;">➕ محصول جديد</button>
+      </div>
+      <select id="calProject">${AppData.projects.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</select>
+      <input id="calArea" placeholder="المساحة"><input id="calPlantDate" type="date"><button onclick="saveCalendar()">توليد</button>`;
   } else if (type === 'supplier') {
     const s = id ? AppData.suppliers.find(x => x.id === id) : null;
     html = `<h3>${id ? 'تعديل مورد' : 'مورد جديد'}</h3><input id="supName" placeholder="اسم المورد" value="${s?.name||''}"><div id="supAccountSelector">${renderAccountSelectorHTML('2210', s?.account||'')}</div><input type="hidden" id="editId" value="${id||''}"><button onclick="saveSupplier()">حفظ</button>`;
@@ -1053,7 +1059,51 @@ function closeModal() { document.getElementById('genericModal').classList.remove
 // دوال مساعدة
 function toggleNewItemFields() { const s = document.getElementById('purItemSelect'); const f = document.getElementById('newItemFields'); if(f) f.style.display = s && s.value==='new' ? 'block' : 'none'; }
 function toggleNewSalesItemFields() { const s = document.getElementById('salesItemSelect'); const f = document.getElementById('newSalesItemFields'); if(f) f.style.display = s && s.value==='new' ? 'block' : 'none'; }
-function toggleNewContractType() { const s = document.getElementById('contractType'); const i = document.getElementById('newContractType'); if(i) i.style.display = s && s.value==='__new__' ? 'block' : 'none'; }    // ======================== دوال الحفظ (مع إضافة createdAt تلقائياً) ========================
+function toggleNewContractType() { const s = document.getElementById('contractType'); const i = document.getElementById('newContractType'); if(i) i.style.display = s && s.value==='__new__' ? 'block' : 'none'; }
+
+// دالة فتح نافذة إضافة محصول جديد للروزنامة
+function openNewCropModal() {
+  const modal = document.getElementById('genericModal'); const content = document.getElementById('modalContent');
+  content.innerHTML = `<h3>إضافة محصول جديد</h3>
+    <input id="newCropName" placeholder="اسم المحصول">
+    <input id="newCropOpCount" type="number" placeholder="عدد العمليات" value="1" min="1">
+    <div id="newCropOps"></div>
+    <button onclick="addCropFields()">➕ إضافة حقول العمليات</button>
+    <button onclick="saveNewCropTemplate()">حفظ المحصول</button>
+    <button class="secondary" onclick="closeModal()">إلغاء</button>`;
+  addCropFields();
+  modal.classList.add('active');
+}
+
+function addCropFields() {
+  const count = parseInt(document.getElementById('newCropOpCount').value) || 1;
+  const container = document.getElementById('newCropOps');
+  let html = '';
+  for (let i = 0; i < count; i++) {
+    html += `<div style="border:1px solid #ddd; padding:8px; margin:5px 0; border-radius:5px;">
+      <input placeholder="وصف العملية ${i+1}" id="cropOpDesc${i}">
+      <input type="number" placeholder="اليوم (بعد الزراعة)" id="cropOpDay${i}">
+      <input type="number" placeholder="التكلفة" id="cropOpCost${i}">
+    </div>`;
+  }
+  container.innerHTML = html;
+}
+
+function saveNewCropTemplate() {
+  const name = document.getElementById('newCropName').value.trim();
+  if (!name) return showToast('أدخل اسم المحصول');
+  const count = parseInt(document.getElementById('newCropOpCount').value) || 1;
+  const operations = [];
+  for (let i = 0; i < count; i++) {
+    const desc = document.getElementById(`cropOpDesc${i}`)?.value.trim();
+    const day = parseInt(document.getElementById(`cropOpDay${i}`)?.value);
+    const cost = parseFloat(document.getElementById(`cropOpCost${i}`)?.value) || 0;
+    if (desc && !isNaN(day)) operations.push({ day, operation: desc, cost });
+  }
+  if (operations.length === 0) return showToast('أضف عملية واحدة على الأقل');
+  AppData.cropTemplates[name] = operations;
+  saveData(); closeModal(); renderContent(); showToast('تم إضافة المحصول: ' + name);
+}    // ======================== دوال الحفظ ========================
     function encodeImage(input) {
       if (input.files && input.files[0]) {
         const reader = new FileReader();
@@ -1172,24 +1222,21 @@ function toggleNewContractType() { const s = document.getElementById('contractTy
     }
 
     function saveCalendar() {
-      const projectId = document.getElementById('calProject').value; const area = document.getElementById('calArea').value;
-      const plantDate = document.getElementById('calPlantDate').value; const project = AppData.projects.find(p => p.id === projectId);
-      if (!project || !plantDate) return;
-      const operations = [];
-      project.phases.forEach(phase => {
-        const opCount = parseInt(prompt(`كم عملية تريد إضافتها لمرحلة "${phase.name}"؟`, '1'));
-        if (opCount > 0) {
-          const start = new Date(phase.start); const end = new Date(phase.end);
-          const duration = (end - start) / (1000 * 60 * 60 * 24); const interval = duration / opCount;
-          for (let i = 0; i < opCount; i++) {
-            const opDate = new Date(start); opDate.setDate(start.getDate() + Math.round(i * interval));
-            const desc = prompt(`وصف العملية ${i + 1} لمرحلة "${phase.name}":`, `عملية ${phase.name} - ${i + 1}`);
-            const cost = parseFloat(prompt(`تكلفة العملية (دولار):`, '0'));
-            operations.push({ date: opDate.toISOString().split('T')[0], desc: desc || `عملية ${phase.name}`, cost: cost || 0, done: false, phaseId: phase.id, personId: AppData.personnel[0]?.id || null });
-          }
-        }
+      const crop = document.getElementById('calCropSelect').value;
+      const projectId = document.getElementById('calProject').value;
+      const area = document.getElementById('calArea').value;
+      const plantDate = document.getElementById('calPlantDate').value;
+      const project = AppData.projects.find(p => p.id === projectId);
+      const template = AppData.cropTemplates[crop];
+      if (!project || !plantDate || !template) return;
+      const start = new Date(plantDate);
+      const operations = template.map(t => {
+        const opDate = new Date(start);
+        opDate.setDate(start.getDate() + t.day);
+        const phase = project.phases.find(ph => ph.name === t.operation) || project.phases[0];
+        return { date: opDate.toISOString().split('T')[0], desc: t.operation, cost: t.cost, done: false, phaseId: phase?.id || null, personId: AppData.personnel[0]?.id || null };
       });
-      AppData.calendarEntries.push({ id:'cal'+Date.now(), projectId, crop: project.crop, area, plantDate, operations, createdAt: new Date().toISOString().slice(0,10) });
+      AppData.calendarEntries.push({ id:'cal'+Date.now(), projectId, crop, area, plantDate, operations, createdAt: new Date().toISOString().slice(0,10) });
       saveData(); closeModal(); renderContent(); showToast('تم إنشاء الروزنامة');
     }
 
