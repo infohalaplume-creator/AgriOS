@@ -1,0 +1,1398 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🌾 AgriOS - نظام إدارة المزرعة</title>
+  <style>
+    :root {
+      --primary: #0F3B2C; --primary-light: #2D6A4F; --bg: #F8FAF9; --card: #FFFFFF;
+      --text: #1e1e1e; --border: #dcdcdc; --shadow: 0 2px 12px rgba(0,0,0,0.08);
+      --radius: 12px; --danger-bg: #fff5f5; --warning-bg: #fff8e1;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body { background: var(--bg); color: var(--text); display: flex; flex-direction: column; min-height: 100vh; }
+    header {
+      background: var(--primary); color: white; padding: 12px 20px;
+      font-size: 1.5em; font-weight: bold; display: flex; align-items: center; gap: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2); position: sticky; top: 0; z-index: 101;
+    }
+    header span { font-size: 1.8em; }
+    nav.tabs {
+      background: var(--card); box-shadow: var(--shadow); display: flex; flex-wrap: wrap; gap: 6px;
+      padding: 10px 16px; position: sticky; top: 56px; z-index: 100; overflow-x: auto;
+    }
+    nav.tabs button {
+      background: transparent; border: none; padding: 8px 16px; border-radius: 20px;
+      font-size: 14px; font-weight: 600; color: #555; cursor: pointer; white-space: nowrap; transition: 0.2s;
+    }
+    nav.tabs button.active { background: var(--primary); color: white; }
+    .container { flex: 1; padding: 16px; max-width: 1200px; margin: 0 auto; width: 100%; }
+    .tab-content { animation: fadeIn 0.3s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .card { background: var(--card); border-radius: var(--radius); padding: 20px; margin-bottom: 20px; box-shadow: var(--shadow); }
+    h2 { color: var(--primary); margin-bottom: 12px; }
+    h3 { color: var(--primary-light); margin-bottom: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 10px; }
+    th, td { padding: 12px 10px; border-bottom: 1px solid var(--border); text-align: right; }
+    th { background: #f0f7f0; color: var(--primary); font-weight: 700; }
+    button {
+      background: var(--primary); color: white; border: none; border-radius: 20px; padding: 10px 20px;
+      font-size: 14px; font-weight: 600; cursor: pointer; margin: 4px 2px; transition: 0.2s;
+    }
+    button:hover { background: #1a4e33; }
+    button.secondary { background: white; color: var(--primary); border: 1px solid var(--primary); }
+    button.danger { background: #b00020; }
+    button.edit-btn { background: #f9a825; color: #000; }
+    input, select, textarea {
+      width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
+      font-size: 14px; margin: 6px 0 12px;
+    }
+    .expired-row { background-color: var(--danger-bg); }
+    .expired-badge { background: #b00020; color: white; padding: 2px 8px; border-radius: 10px; font-size: 12px; }
+    .warning-badge { background: #f9a825; color: #000; padding: 2px 8px; border-radius: 10px; font-size: 12px; }
+    .success-badge { background: #2e7d32; color: white; padding: 2px 8px; border-radius: 10px; font-size: 12px; }
+    .modal {
+      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5); z-index: 200; justify-content: center; align-items: center;
+    }
+    .modal.active { display: flex; }
+    .modal-content {
+      background: white; border-radius: var(--radius); padding: 24px; max-width: 600px;
+      width: 90%; max-height: 85vh; overflow-y: auto;
+    }
+    .toast {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: #323232; color: white; padding: 12px 24px; border-radius: 24px;
+      font-size: 14px; opacity: 0; transition: opacity 0.3s; z-index: 300;
+    }
+    .toast.show { opacity: 1; }
+    .flex-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+  </style>
+</head>
+<body>
+  <header>🌾 AgriOS</header>
+  <nav class="tabs" id="mainTabs"></nav>
+  <div class="container" id="tabContainer"></div>
+  <div class="toast" id="toast"></div>
+  <div class="modal" id="genericModal">
+    <div class="modal-content" id="modalContent"></div>
+  </div>
+
+  <script>
+    const AppData = {
+      chartOfAccounts: [],
+      projects: [],
+      inventory: [],
+      personnel: [],
+      tasks: [],
+      journalEntries: [],
+      calendarEntries: [],
+      suppliers: [],
+      purchaseInvoices: [],
+      purchaseReturns: [],
+      salesInvoices: [],
+      salesReturns: [],
+      servicePurchaseInvoices: [],
+      servicePurchaseReturns: [],
+      serviceSalesInvoices: [],
+      serviceSalesReturns: [],
+      contracts: [],
+      training: [],
+      maintenanceLog: [],
+      assets: [],
+      contractTypes: ['خدمات', 'توريد', 'استشارات', 'صيانة', 'أخرى'],
+      trainingMedia: [],
+      banks: [],
+      bankTransactions: [],
+      bankReconciliations: [],
+      checks: [],
+      treasury: { openingBalance: 0, transactions: [] },
+      knowledge: [],
+      channels: [],
+      settings: { companyName: 'مزرعتي', language: 'ar' }
+    };
+
+    // ======================== دوال المحاسبة المركزية ========================
+    function getFlatAccounts() {
+      const main = [
+        { code: '1210', name: 'النقدية (الخزينة)' }, { code: '1220', name: 'أصول ثابتة' },
+        { code: '1230', name: 'مدينون (عملاء)' }, { code: '1240', name: 'ميزانيات المشاريع' },
+        { code: '1250', name: 'شيكات مستلمة' }, { code: '1260', name: 'شيكات واجبة الدفع' },
+        { code: '2210', name: 'دائنون (موردون)' }, { code: '2310', name: 'مستحقات موظفين' },
+        { code: '4100', name: 'مبيعات بضاعة' }, { code: '4200', name: 'إيرادات خدمات' },
+        { code: '5100', name: 'تكاليف زراعية' }, { code: '5200', name: 'إنتاج جاهز' },
+        { code: '5400', name: 'صيانة' }, { code: '5600', name: 'تدريب' },
+        { code: '5700', name: 'مصروفات إدارية' }, { code: '5800', name: 'مصروفات بنكية' }
+      ];
+      return [...main, ...AppData.chartOfAccounts];
+    }
+
+    function addSubAccount(parentCode, entityName, entityType) {
+      const cleanName = entityName.replace(/\s+/g, '');
+      const code = parentCode + '-' + cleanName;
+      if (!AppData.chartOfAccounts.find(a => a.code === code)) {
+        AppData.chartOfAccounts.push({ code, name: entityName, type: entityType || 'فرعي' });
+        saveData();
+      }
+      return code;
+    }
+
+    function genJE(debit, credit, amount, desc = '') {
+      AppData.journalEntries.push({ id: Date.now(), date: new Date().toISOString().slice(0,10), debit, credit, amount, desc });
+      saveData();
+    }
+
+    function addTreasuryMovement(type, amount, desc, relatedAccount) {
+      AppData.treasury.transactions.push({
+        id: Date.now(), date: new Date().toISOString().slice(0,10), type, amount, desc, relatedAccount
+      });
+      saveData();
+    }
+
+    function getTreasuryBalance() {
+      return AppData.treasury.transactions.reduce((sum, t) => sum + (t.type === 'مقبوضات' ? t.amount : -t.amount), AppData.treasury.openingBalance);
+    }
+
+    function addBankTransaction(bankId, type, amount, desc, relatedAccount) {
+      AppData.bankTransactions.push({
+        id: Date.now(), bankId, date: new Date().toISOString().slice(0,10), type, amount, desc, relatedAccount
+      });
+      saveData();
+    }
+
+    function renderAccountSelectorHTML(parentCode, selectedCode = '', placeholder = 'اختر الحساب') {
+      const accounts = getFlatAccounts().filter(a => a.code.startsWith(parentCode));
+      let html = `<select class="account-select" data-parent="${parentCode}" onchange="toggleNewAccountInput(this)">`;
+      html += `<option value="">${placeholder}</option>`;
+      accounts.forEach(acc => {
+        const sel = acc.code === selectedCode ? 'selected' : '';
+        html += `<option value="${acc.code}" ${sel}>${acc.code} - ${acc.name}</option>`;
+      });
+      html += `<option value="__new__">➕ إنشاء حساب جديد</option></select>`;
+      html += `<input type="text" class="new-account-name" placeholder="اسم الحساب الجديد" style="display:none; margin-top:4px;" onblur="createAccountFromInput(this)" />`;
+      return html;
+    }
+
+    function toggleNewAccountInput(selectEl) {
+      const input = selectEl.parentElement.querySelector('.new-account-name');
+      input.style.display = selectEl.value === '__new__' ? 'block' : 'none';
+    }
+
+    function createAccountFromInput(inputEl) {
+      const container = inputEl.parentElement;
+      const select = container.querySelector('.account-select');
+      const parentCode = select.dataset.parent;
+      const name = inputEl.value.trim();
+      if (!name) return;
+      const code = addSubAccount(parentCode, name, 'فرعي');
+      container.querySelector('.account-select').innerHTML = renderAccountSelectorHTML(parentCode, code, 'اختر الحساب');
+      inputEl.style.display = 'none';
+      showToast('تم إنشاء الحساب: ' + code);
+    }
+
+    function getSelectedAccount(containerEl) {
+      const select = containerEl.querySelector('.account-select');
+      if (!select) return null;
+      if (select.value === '__new__') {
+        const input = containerEl.querySelector('.new-account-name');
+        if (input && input.value.trim()) return addSubAccount(select.dataset.parent, input.value.trim(), 'فرعي');
+        return null;
+      }
+      return select.value;
+    }
+
+    function addContractType(newType) {
+      if (!AppData.contractTypes.includes(newType)) {
+        AppData.contractTypes.push(newType);
+        saveData();
+        return true;
+      }
+      return false;
+    }
+
+    function addTrainingMedia(trainingId, type, url, title) {
+      AppData.trainingMedia.push({ id: 'tm' + Date.now(), trainingId, type, url, title: title || 'بدون عنوان' });
+      saveData();
+    }
+
+    function deleteTrainingMedia(mediaId) {
+      AppData.trainingMedia = AppData.trainingMedia.filter(m => m.id !== mediaId);
+      saveData();
+    }
+
+    function saveData() { localStorage.setItem('agrios_v17', JSON.stringify(AppData)); }
+    function loadData() {
+      const raw = localStorage.getItem('agrios_v17');
+      if (raw) Object.assign(AppData, JSON.parse(raw));
+      else {
+        addSubAccount('2310', 'علي أحمد', 'موظف');
+        addSubAccount('2210', 'شركة الكلثوم', 'مورد');
+        addSubAccount('1230', 'عميل نقدي', 'مدين');
+        const budgetAcc = addSubAccount('1240', 'مزرعة فراولة', 'ميزانية مشروع');
+        const storeAcc = addSubAccount('5200', 'فراولة', 'إنتاج جاهز');
+        const projId = 'p1';
+        AppData.projects.push({
+          id: projId, name: 'مزرعة فراولة', budget: 18000, location: 'حقل 5', crop: 'فراولة',
+          budgetAccount: budgetAcc, produceStoreAccount: storeAcc, createdAt: '2026-01-01',
+          phases: [
+            { id: 'ph1', name: 'تجهيز الأرض', start: '2026-09-01', end: '2026-09-20', budget: 5000, spent: 0 },
+            { id: 'ph2', name: 'زراعة', start: '2026-09-21', end: '2026-10-15', budget: 4000, spent: 0 }
+          ],
+          risks: [{ desc: 'تأخر الأمطار', impact: 'متوسط', mitigation: 'ري تكميلي' }],
+          kpis: [{ id: 'kpi1', name: 'تقدم المهام', value: 0, unit: '%' }, { id: 'kpi2', name: 'الميزانية المتبقية', value: 100, unit: '%' }]
+        });
+        AppData.inventory.push({ id: 'inv-prod-p1', name: 'فراولة طازجة', category: 'إنتاج جاهز', quantity: 0, unit: 'كجم', expenseAccount: storeAcc, expiryDate: '2027-06-01', projectId: projId, createdAt: '2026-01-01' });
+        AppData.inventory.push({ id: 'inv-mat-1', name: 'سماد يوريا', category: 'أسمدة', quantity: 100, unit: 'كجم', expenseAccount: '5100', expiryDate: '2026-12-31', createdAt: '2026-01-01' });
+        AppData.personnel.push({ id: 'emp1', name: 'علي أحمد', account: '2310-عليأحمد', totalAccrued: 0, totalPaid: 0, birthDate: '1990-05-15', phone: '0123456789', address: 'الخرطوم', nationalId: '123456789', startDate: '2025-01-01', contractEndDate: '2027-01-01', vacationDays: 15, image: '', createdAt: '2026-01-01' });
+        AppData.suppliers.push({ id: 'sup1', name: 'شركة الكلثوم', account: '2210-شركةالكلثوم', createdAt: '2026-01-01' });
+        AppData.assets.push({ id: 'ast1', name: 'مضخة ري', account: addSubAccount('1220', 'مضخة ري', 'أصل'), maintenanceAccount: addSubAccount('5400', 'صيانة-مضخةري', 'صيانة'), createdAt: '2026-01-01' });
+        AppData.tasks.push({ id: 't1', title: 'حرث أرض المشروع', cost: 500, projectId: projId, projectName: 'مزرعة فراولة', personId: 'emp1', personName: 'علي أحمد', done: false, phaseId: 'ph1', date: '2026-09-01', createdAt: '2026-01-01' });
+        AppData.calendarEntries.push({ id: 'cal1', projectId: projId, crop: 'فراولة', area: '2 هكتار', plantDate: '2026-09-21', operations: [{ date: '2026-09-21', desc: 'زراعة الشتلات', cost: 3000, done: false, phaseId: 'ph2', personId: 'emp1' }], createdAt: '2026-01-01' });
+        AppData.treasury.openingBalance = 5000;
+        AppData.treasury.transactions.push({ id: 't0', date: '2026-06-01', type: 'مقبوضات', amount: 5000, desc: 'رصيد افتتاحي', relatedAccount: '1210' });
+        AppData.banks.push({ id: 'bank1', name: 'بنك المزرعة', account: addSubAccount('1210', 'بنك المزرعة', 'بنك'), createdAt: '2026-01-01' });
+        AppData.bankTransactions.push({ id: 'bt1', bankId: 'bank1', date: '2026-06-01', type: 'إيداع', amount: 10000, desc: 'إيداع أولي', relatedAccount: '1210' });
+        AppData.checks.push({ id: 'chk1', checkNumber: '1001', bankId: 'bank1', type: 'مستلم', from: 'عميل أ', amount: 3000, dueDate: '2026-07-15', status: 'مستحق', relatedAccount: '1230-عميلنقدي', date: '2026-01-01' });
+        AppData.knowledge.push({ id: 'k1', content: 'أفضل موعد لزراعة الفراولة هو سبتمبر', tags: 'زراعة, فراولة', createdAt: '2026-01-01' });
+        AppData.channels.push({ id: 'msg1', text: 'مرحباً بكم في نظام AgriOS', timestamp: new Date().toLocaleString() });
+        saveData();
+      }
+    }
+
+    const tabs = ['لوحة القيادة', 'الخزينة', 'البنوك', 'المشاريع', 'خطة المشروع', 'المخزون', 'الموظفون', 'المهام', 'الروزنامة', 'الموردون', 'المبيعات', 'الخدمات', 'العقود', 'الأصول', 'التدريب', 'المعرفة', 'القنوات', 'الإعدادات', 'التقارير'];
+    let currentTab = 'لوحة القيادة';
+    window.selectedProjectId = null;
+
+    function renderTabs() {
+      document.getElementById('mainTabs').innerHTML = tabs.map(t =>
+        `<button class="${t === currentTab ? 'active' : ''}" onclick="switchTab('${t}')">${t}</button>`
+      ).join('');
+    }
+
+    function switchTab(tabName) { currentTab = tabName; renderTabs(); renderContent(); }
+
+    function renderContent() {
+      const container = document.getElementById('tabContainer');
+      container.innerHTML = `<div class="tab-content" id="tab-${currentTab}"></div>`;
+      const el = document.getElementById(`tab-${currentTab}`);
+      const renderers = {
+        'لوحة القيادة': renderDashboard, 'الخزينة': renderTreasury, 'البنوك': renderBanks,
+        'المشاريع': renderProjects, 'خطة المشروع': renderProjectPlan, 'المخزون': renderInventory,
+        'الموظفون': renderPersonnel, 'المهام': renderTasks, 'الروزنامة': renderCalendar,
+        'الموردون': renderSuppliers, 'المبيعات': renderSales, 'الخدمات': renderServices,
+        'العقود': renderContracts, 'الأصول': renderAssets, 'التدريب': renderTraining,
+        'المعرفة': renderKnowledge, 'القنوات': renderChannels, 'الإعدادات': renderSettings, 'التقارير': renderReports
+      };
+      if (renderers[currentTab]) renderers[currentTab](el);
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg; t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2500);
+    }
+
+    function renderDashboard(el) {
+      const totalTasks = AppData.tasks.length;
+      const doneTasks = AppData.tasks.filter(t => t.done).length;
+      const totalBudget = AppData.projects.reduce((s, p) => s + p.budget, 0);
+      const totalSpent = AppData.projects.reduce((s, p) => s + p.phases.reduce((ps, ph) => ps + ph.spent, 0), 0);
+      const schedulePercent = totalTasks ? Math.round((doneTasks / totalTasks) * 100) : 100;
+      const budgetRemaining = totalBudget ? Math.round(((totalBudget - totalSpent) / totalBudget) * 100) : 100;
+      const treasuryBalance = getTreasuryBalance();
+      const today = new Date().toISOString().split('T')[0];
+      const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const dueToday = AppData.checks.filter(c => c.status === 'مستحق' && c.dueDate <= today);
+      const dueSoon = AppData.checks.filter(c => c.status === 'مستحق' && c.dueDate > today && c.dueDate <= nextWeek);
+      const totalReceivables = AppData.journalEntries.filter(j => j.debit.startsWith('1230')).reduce((s, j) => s + j.amount, 0) - AppData.journalEntries.filter(j => j.credit.startsWith('1230')).reduce((s, j) => s + j.amount, 0);
+      const totalPayables = AppData.journalEntries.filter(j => j.credit.startsWith('2210')).reduce((s, j) => s + j.amount, 0) - AppData.journalEntries.filter(j => j.debit.startsWith('2210')).reduce((s, j) => s + j.amount, 0);
+      const liquidityRatio = totalPayables > 0 ? (treasuryBalance / totalPayables).toFixed(2) : '∞';
+
+      el.innerHTML = `<h2>لوحة القيادة</h2>
+        <div class="grid-3">
+          <div class="card"><h3>💰 الخزينة</h3><p style="font-size:24px;">${treasuryBalance.toFixed(2)} $</p></div>
+          <div class="card"><h3>📊 تقدم المهام</h3><p>${schedulePercent}% (${doneTasks}/${totalTasks})</p></div>
+          <div class="card"><h3>📋 المشاريع</h3><p>${AppData.projects.length} مشروع</p></div>
+          <div class="card"><h3>🏦 البنوك</h3><p>${AppData.banks.length} حساب</p></div>
+          <div class="card"><h3>⚠️ شيكات اليوم</h3><p style="color:${dueToday.length ? 'red' : 'green'}">${dueToday.length} شيك</p></div>
+          <div class="card"><h3>⏰ شيكات قريبة</h3><p style="color:${dueSoon.length ? 'orange' : 'green'}">${dueSoon.length} شيك خلال 7 أيام</p></div>
+          <div class="card"><h3>📊 نسبة استخدام الميزانية</h3><p style="font-size:20px;">${budgetRemaining}%</p></div>
+          <div class="card"><h3>💳 الذمم المدينة</h3><p style="font-size:20px;">${totalReceivables.toFixed(2)} $</p></div>
+          <div class="card"><h3>📋 الذمم الدائنة</h3><p style="font-size:20px;">${totalPayables.toFixed(2)} $</p></div>
+          <div class="card"><h3>🔍 نسبة السيولة</h3><p style="font-size:20px;">${liquidityRatio}</p></div>
+        </div>
+        ${dueToday.length > 0 ? `<div class="card" style="background:#ffebee;"><h3>🚨 شيكات مستحقة اليوم</h3><table>${dueToday.map(c => `<tr><td>${c.checkNumber}</td><td>${c.type}</td><td>${c.amount} $</td></tr>`).join('')}</table></div>` : ''}
+        ${dueSoon.length > 0 ? `<div class="card" style="background:#fff8e1;"><h3>📅 شيكات تستحق قريباً</h3><table>${dueSoon.map(c => `<tr><td>${c.checkNumber}</td><td>${c.type}</td><td>${c.amount} $</td><td>${c.dueDate}</td></tr>`).join('')}</table></div>` : ''}`;
+    }// ======================== الخزينة (مركز العمليات اليومية) ========================
+function renderTreasury(el) {
+  const balance = getTreasuryBalance();
+  const today = new Date().toISOString().split('T')[0];
+  const dueChecks = AppData.checks.filter(c => c.status === 'مستحق' && c.dueDate <= today);
+  const collectibleChecks = dueChecks.filter(c => c.type === 'مستلم');
+  const payableChecks = dueChecks.filter(c => c.type === 'واجب الدفع');
+  const recentInvoices = [
+    ...AppData.salesInvoices.slice(-5).map(inv => ({...inv, invType: 'فاتورة بيع'})),
+    ...AppData.purchaseInvoices.slice(-5).map(inv => ({...inv, invType: 'فاتورة شراء'})),
+    ...AppData.serviceSalesInvoices.slice(-5).map(inv => ({...inv, invType: 'بيع خدمات'})),
+    ...AppData.servicePurchaseInvoices.slice(-5).map(inv => ({...inv, invType: 'شراء خدمات'}))
+  ].sort((a,b) => b.date.localeCompare(a.date)).slice(0,10);
+
+  el.innerHTML = `<h2>الخزينة - مركز العمليات اليومية</h2>
+    <div class="card" style="background:#e8f5e9;"><h3>💰 الرصيد الحالي: ${balance.toFixed(2)} $</h3></div>
+    ${dueChecks.length > 0 ? `<div class="card" style="background:#ffebee;">
+      <h3>⚠️ تنبيهات الشيكات المستحقة اليوم</h3>
+      ${collectibleChecks.length > 0 ? `<p><strong>📥 شيكات يجب تحصيلها:</strong> ${collectibleChecks.map(c => `#${c.checkNumber} (${c.amount}$)`).join(', ')}</p>` : ''}
+      ${payableChecks.length > 0 ? `<p><strong>📤 شيكات يجب دفعها:</strong> ${payableChecks.map(c => `#${c.checkNumber} (${c.amount}$)`).join(', ')}</p>` : ''}
+    </div>` : ''}
+    <div class="flex-row" style="margin-bottom:20px;">
+      <button onclick="openModal('treasuryMovement')">➕ حركة خزينة</button>
+      <button onclick="openModal('check')">📝 إضافة شيك</button>
+      <button onclick="openModal('salesInvoice')">🧾 فاتورة بيع</button>
+      <button onclick="openModal('purchaseInvoice')">📋 فاتورة شراء</button>
+      <button onclick="openModal('serviceSalesInvoice')">📊 بيع خدمات</button>
+      <button onclick="openModal('servicePurchaseInvoice')">🛒 شراء خدمات</button>
+      <button onclick="switchTab('البنوك')">🏦 البنوك</button>
+      <button onclick="switchTab('التقارير')">📊 التقارير</button>
+    </div>
+    <div class="grid-2"><div class="card"><h3>آخر الحركات</h3><table>${AppData.treasury.transactions.slice(-10).reverse().map(t => `<tr><td>${t.date}</td><td>${t.type}</td><td>${t.amount.toFixed(2)}</td><td>${t.desc}</td></tr>`).join('')}</table></div>
+    <div class="card"><h3>آخر الفواتير</h3><table><tr><th>التاريخ</th><th>النوع</th><th>الطرف</th><th>المبلغ</th></tr>
+    ${recentInvoices.map(inv => `<tr><td>${inv.date}</td><td>${inv.invType}</td><td>${inv.customerName||AppData.suppliers.find(s=>s.id===inv.supplierId)?.name||''}</td><td>${inv.total||0}</td></tr>`).join('')}</table></div></div>`;
+}
+
+// ======================== البنوك (مع تنبيهات الشيكات) ========================
+function renderBanks(el) {
+  el.innerHTML = `<h2>البنوك</h2><button onclick="openModal('bank')">➕ حساب بنكي جديد</button><div id="bankList"></div>
+    <h3>الشيكات</h3><button onclick="openModal('check')">📝 إضافة شيك</button><table id="checksTable"></table>`;
+  
+  document.getElementById('bankList').innerHTML = AppData.banks.map(b => {
+    const bankBalance = AppData.bankTransactions.filter(t => t.bankId === b.id).reduce((s, t) => s + (t.type === 'إيداع' ? t.amount : -t.amount), 0);
+    const lastReconciliation = AppData.bankReconciliations.filter(r => r.bankId === b.id).sort((a,b) => b.date.localeCompare(a.date))[0];
+    return `<div class="card">
+      <strong>${b.name}</strong> (${b.account})<br>الرصيد الدفتري: ${bankBalance.toFixed(2)} $<br>تاريخ الإنشاء: ${b.createdAt||''}
+      ${lastReconciliation ? `<br>آخر تسوية: ${lastReconciliation.date} | الرصيد الفعلي: ${lastReconciliation.actualBalance.toFixed(2)} $` : '<br>لا توجد تسوية بعد'}
+      <div style="margin-top:10px;"><button onclick="openModal('bankTransaction','${b.id}')">➕ حركة</button><button class="edit-btn" onclick="openModal('bankReconciliation','${b.id}')">📋 تسوية</button><button class="edit-btn" onclick="openModal('bank','${b.id}')">✏️</button><button class="danger" onclick="deleteBank('${b.id}')">🗑️</button></div></div>`;
+  }).join('');
+
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('checksTable').innerHTML = `<tr><th>رقم الشيك</th><th>النوع</th><th>البنك</th><th>من/إلى</th><th>المبلغ</th><th>الاستحقاق</th><th>الحالة</th><th>الحساب</th><th></th></tr>
+    ${AppData.checks.map(c => {
+      const bank = AppData.banks.find(b => b.id === c.bankId);
+      const isDue = c.status === 'مستحق' && c.dueDate <= today;
+      const isDueSoon = c.status === 'مستحق' && c.dueDate > today && c.dueDate <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      let rowClass = '';
+      if (isDue) rowClass = 'expired-row';
+      else if (isDueSoon) rowClass = 'warning-bg';
+      return `<tr class="${rowClass}">
+        <td>${c.checkNumber}</td><td>${c.type === 'مستلم' ? '📥 مستلم' : '📤 واجب الدفع'}</td>
+        <td>${bank?.name||''}</td><td>${c.from||c.to||''}</td><td>${c.amount.toFixed(2)} $</td>
+        <td>${c.dueDate} ${isDue ? '<span class="expired-badge">مستحق!</span>' : (isDueSoon ? '<span class="warning-badge">قريب</span>' : '')}</td><td>${c.status}</td>
+        <td>${c.relatedAccount||''}</td>
+        <td>${c.status === 'مستحق' ? `<button onclick="cashCheck('${c.id}')">💰 صرف</button>` : ''}
+        <button class="edit-btn" onclick="openModal('check','${c.id}')">✏️</button><button class="danger" onclick="deleteCheck('${c.id}')">🗑️</button></td></tr>`;
+    }).join('')}`;
+}
+
+function deleteBank(id) { if(!confirm('حذف البنك؟')) return; AppData.banks = AppData.banks.filter(b => b.id !== id); AppData.bankTransactions = AppData.bankTransactions.filter(t => t.bankId !== id); AppData.checks = AppData.checks.filter(c => c.bankId !== id); saveData(); renderContent(); showToast('تم الحذف'); }
+
+function cashCheck(checkId) {
+  const check = AppData.checks.find(c => c.id === checkId);
+  if (!check || check.status !== 'مستحق') return;
+  check.status = 'مصروف';
+  if (check.type === 'مستلم') {
+    addTreasuryMovement('مقبوضات', check.amount, `تحصيل شيك رقم ${check.checkNumber}`, check.relatedAccount);
+    addBankTransaction(check.bankId, 'إيداع', check.amount, `تحصيل شيك ${check.checkNumber}`, '1210');
+    genJE('1210', check.relatedAccount, check.amount, `تحصيل شيك ${check.checkNumber}`);
+  } else {
+    addTreasuryMovement('مدفوعات', check.amount, `صرف شيك رقم ${check.checkNumber}`, check.relatedAccount);
+    addBankTransaction(check.bankId, 'سحب', check.amount, `صرف شيك ${check.checkNumber}`, '1210');
+    genJE(check.relatedAccount, '1210', check.amount, `صرف شيك ${check.checkNumber}`);
+  }
+  saveData(); renderContent(); showToast('تم صرف الشيك');
+}
+
+function deleteCheck(id) { if(!confirm('حذف الشيك؟')) return; AppData.checks = AppData.checks.filter(c => c.id !== id); saveData(); renderContent(); showToast('تم الحذف'); }
+
+// ======================== المشاريع ========================
+function renderProjects(el) {
+  el.innerHTML = `<h2>المشاريع</h2><button onclick="openModal('project')">➕ مشروع جديد</button><div id="projectList"></div>`;
+  document.getElementById('projectList').innerHTML = AppData.projects.map(p => `
+    <div class="card"><strong>${p.name}</strong> (${p.crop})<br>تاريخ الإنشاء: ${p.createdAt||''}<br>
+      <button onclick="selectProject('${p.id}')">📋 خطة</button>
+      <button class="edit-btn" onclick="openModal('project','${p.id}')">✏️</button>
+      <button class="danger" onclick="deleteProject('${p.id}')">🗑️</button>
+    </div>`).join('');
+}
+
+function selectProject(pid) { window.selectedProjectId = pid; switchTab('خطة المشروع'); }
+function deleteProject(id) { if (!confirm('حذف المشروع؟')) return; AppData.projects = AppData.projects.filter(p => p.id !== id); saveData(); renderContent(); showToast('تم الحذف'); }
+
+// ======================== خطة المشروع ========================
+function renderProjectPlan(el) {
+  const project = AppData.projects.find(p => p.id === window.selectedProjectId);
+  if (!project) { el.innerHTML = '<p>اختر مشروعًا من قسم المشاريع.</p>'; return; }
+  el.innerHTML = `
+    <h2>خطة مشروع: ${project.name}</h2>
+    <div class="card"><h3>المراحل <button onclick="openPhaseModal('add')">➕ إضافة مرحلة</button></h3>
+      <table><tr><th>المرحلة</th><th>من</th><th>إلى</th><th>الميزانية</th><th>المصروف</th><th></th></tr>
+      ${project.phases.map(ph => `<tr><td>${ph.name}</td><td>${ph.start}</td><td>${ph.end}</td><td>${ph.budget}</td><td>${ph.spent}</td>
+        <td><button class="edit-btn" onclick="openPhaseModal('edit','${ph.id}')">✏️</button><button class="danger" onclick="deletePhase('${ph.id}')">🗑️</button></td></tr>`).join('')}</table></div>
+    <div class="card"><h3>المخاطر <button onclick="openRiskModal('add')">➕ إضافة خطر</button></h3>
+      ${project.risks.map(r => `<div style="border-bottom:1px solid var(--border); padding:8px 0;"><strong>${r.desc}</strong> (${r.impact}) - ${r.mitigation} <button class="edit-btn" onclick="openRiskModal('edit','${r.desc}')">✏️</button> <button class="danger" onclick="deleteRisk('${r.desc}')">🗑️</button></div>`).join('')}</div>
+    <div class="card"><h3>مؤشرات الأداء <button onclick="openKPIModal('add')">➕ إضافة مؤشر</button></h3>
+      ${project.kpis.map(kpi => `<div style="border-bottom:1px solid var(--border); padding:8px 0;"><strong>${kpi.name}</strong>: ${kpi.value}${kpi.unit} <button class="edit-btn" onclick="openKPIModal('edit','${kpi.id}')">✏️</button> <button class="danger" onclick="deleteKPI('${kpi.id}')">🗑️</button></div>`).join('')}</div>`;
+}
+
+function openPhaseModal(mode, phaseId = null) {
+  const project = AppData.projects.find(p => p.id === window.selectedProjectId);
+  const phase = mode === 'edit' ? project.phases.find(ph => ph.id === phaseId) : null;
+  const modal = document.getElementById('genericModal'); const content = document.getElementById('modalContent');
+  content.innerHTML = `<h3>${mode === 'add' ? 'إضافة مرحلة' : 'تعديل مرحلة'}</h3>
+    <input id="phName" placeholder="اسم المرحلة" value="${phase?.name||''}">
+    <input id="phStart" type="date" value="${phase?.start||''}"><input id="phEnd" type="date" value="${phase?.end||''}">
+    <input id="phBudget" type="number" placeholder="الميزانية" value="${phase?.budget||''}">
+    <input type="hidden" id="phId" value="${phaseId||''}">
+    <button onclick="savePhase()">حفظ</button><button class="secondary" onclick="closeModal()">إلغاء</button>`;
+  modal.classList.add('active');
+}
+
+function savePhase() {
+  const project = AppData.projects.find(p => p.id === window.selectedProjectId);
+  const name = document.getElementById('phName').value.trim(); const start = document.getElementById('phStart').value;
+  const end = document.getElementById('phEnd').value; const budget = parseFloat(document.getElementById('phBudget').value) || 0;
+  const id = document.getElementById('phId').value;
+  if (!name) return;
+  if (id) { const ph = project.phases.find(p => p.id === id); if (ph) { ph.name=name; ph.start=start; ph.end=end; ph.budget=budget; } }
+  else project.phases.push({ id: 'ph'+Date.now(), name, start, end, budget, spent: 0 });
+  saveData(); closeModal(); renderContent(); showToast(id ? 'تم التعديل' : 'تمت الإضافة');
+}
+
+function deletePhase(phaseId) {
+  const project = AppData.projects.find(p => p.id === window.selectedProjectId);
+  if (!confirm('حذف المرحلة؟')) return;
+  project.phases = project.phases.filter(ph => ph.id !== phaseId);
+  saveData(); renderContent(); showToast('تم الحذف');
+}
+
+function openRiskModal(mode, desc = null) {
+  const project = AppData.projects.find(p => p.id === window.selectedProjectId);
+  const risk = mode === 'edit' ? project.risks.find(r => r.desc === desc) : null;
+  const modal = document.getElementById('genericModal'); const content = document.getElementById('modalContent');
+  content.innerHTML = `<h3>${mode === 'add' ? 'إضافة خطر' : 'تعديل خطر'}</h3>
+    <input id="riskDesc" placeholder="وصف الخطر" value="${risk?.desc||''}">
+    <input id="riskImpact" placeholder="التأثير" value="${risk?.impact||''}">
+    <input id="riskMitigation" placeholder="خطة التخفيف" value="${risk?.mitigation||''}">
+    <input type="hidden" id="oldDesc" value="${desc||''}">
+    <button onclick="saveRisk()">حفظ</button><button class="secondary" onclick="closeModal()">إلغاء</button>`;
+  modal.classList.add('active');
+}
+
+function saveRisk() {
+  const project = AppData.projects.find(p => p.id === window.selectedProjectId);
+  const desc = document.getElementById('riskDesc').value.trim(); const impact = document.getElementById('riskImpact').value.trim();
+  const mitigation = document.getElementById('riskMitigation').value.trim(); const oldDesc = document.getElementById('oldDesc').value;
+  if (!desc) return;
+  if (oldDesc) { const r = project.risks.find(r => r.desc === oldDesc); if (r) { r.desc=desc; r.impact=impact; r.mitigation=mitigation; } }
+  else project.risks.push({ desc, impact, mitigation });
+  saveData(); closeModal(); renderContent(); showToast(oldDesc ? 'تم التعديل' : 'تمت الإضافة');
+}
+
+function deleteRisk(desc) {
+  const project = AppData.projects.find(p => p.id === window.selectedProjectId);
+  project.risks = project.risks.filter(r => r.desc !== desc);
+  saveData(); renderContent(); showToast('تم الحذف');
+}
+
+function openKPIModal(mode, kpiId = null) {
+  const project = AppData.projects.find(p => p.id === window.selectedProjectId);
+  const kpi = mode === 'edit' ? project.kpis.find(k => k.id === kpiId) : null;
+  const modal = document.getElementById('genericModal'); const content = document.getElementById('modalContent');
+  content.innerHTML = `<h3>${mode === 'add' ? 'إضافة مؤشر' : 'تعديل مؤشر'}</h3>
+    <input id="kpiName" placeholder="اسم المؤشر" value="${kpi?.name||''}">
+    <input id="kpiValue" type="number" placeholder="القيمة" value="${kpi?.value||''}">
+    <input id="kpiUnit" placeholder="وحدة القياس (مثل %)" value="${kpi?.unit||''}">
+    <input type="hidden" id="kpiId" value="${kpiId||''}">
+    <button onclick="saveKPI()">حفظ</button><button class="secondary" onclick="closeModal()">إلغاء</button>`;
+  modal.classList.add('active');
+}
+
+function saveKPI() {
+  const project = AppData.projects.find(p => p.id === window.selectedProjectId);
+  const name = document.getElementById('kpiName').value.trim(); const value = parseFloat(document.getElementById('kpiValue').value) || 0;
+  const unit = document.getElementById('kpiUnit').value.trim(); const id = document.getElementById('kpiId').value;
+  if (!name) return;
+  if (id) { const kpi = project.kpis.find(k => k.id === id); if (kpi) { kpi.name=name; kpi.value=value; kpi.unit=unit; } }
+  else project.kpis.push({ id: 'kpi'+Date.now(), name, value, unit });
+  saveData(); closeModal(); renderContent(); showToast(id ? 'تم التعديل' : 'تمت الإضافة');
+}
+
+function deleteKPI(kpiId) {
+  const project = AppData.projects.find(p => p.id === window.selectedProjectId);
+  if (!confirm('حذف المؤشر؟')) return;
+  project.kpis = project.kpis.filter(k => k.id !== kpiId);
+  saveData(); renderContent(); showToast('تم الحذف');
+}
+
+// ======================== المخزون ========================
+function isExpired(dateStr) { if (!dateStr) return false; const today = new Date(); today.setHours(0,0,0,0); return new Date(dateStr) < today; }
+function getExpiryWarning(dateStr) { if (!dateStr) return ''; const today = new Date(); today.setHours(0,0,0,0); const diffDays = Math.ceil((new Date(dateStr) - today) / (1000*60*60*24)); if (diffDays < 0) return 'منتهية'; if (diffDays <= 30) return `متبقي ${diffDays} يوم`; return ''; }
+
+function renderInventory(el) {
+  el.innerHTML = `<h2>المخزون</h2><button onclick="openModal('inventory')">➕ مادة جديدة</button><table id="invTable"></table>`;
+  document.getElementById('invTable').innerHTML = `<tr><th>المادة</th><th>التصنيف</th><th>الكمية</th><th>الوحدة</th><th>الصلاحية</th><th>تاريخ الإنشاء</th><th>الحساب</th><th></th></tr>
+    ${AppData.inventory.map(item => {
+      const expired = isExpired(item.expiryDate); const warn = getExpiryWarning(item.expiryDate);
+      return `<tr class="${expired ? 'expired-row' : ''}"><td>${item.name} ${warn ? `<span class="expired-badge">${warn}</span>` : ''}</td><td>${item.category}</td><td>${item.quantity}</td><td>${item.unit}</td><td>${item.expiryDate || '-'}</td><td>${item.createdAt||''}</td><td>${item.expenseAccount}</td><td><button class="edit-btn" onclick="openModal('inventory','${item.id}')">✏️</button><button class="danger" onclick="deleteInventory('${item.id}')">🗑️</button></td></tr>`;
+    }).join('')}`;
+}
+
+function deleteInventory(id) { if (!confirm('حذف المادة؟')) return; AppData.inventory = AppData.inventory.filter(i => i.id !== id); saveData(); renderContent(); showToast('تم الحذف'); }
+
+// ======================== الموظفون ========================
+function renderPersonnel(el) {
+  el.innerHTML = `<h2>الموظفون</h2><button onclick="openModal('personnel')">➕ موظف جديد</button><table id="empTable"></table>`;
+  const table = document.getElementById('empTable');
+  let rows = `<tr><th>الاسم</th><th>الهاتف</th><th>بدء العمل</th><th>انتهاء العقد</th><th>تاريخ الإضافة</th><th>المستحقات</th><th>المدفوع</th><th>المتبقي</th><th></th></tr>`;
+  AppData.personnel.forEach(emp => {
+    const remaining = emp.totalAccrued - emp.totalPaid; const today = new Date(); today.setHours(0,0,0,0);
+    const contractEnd = emp.contractEndDate ? new Date(emp.contractEndDate) : null;
+    let contractWarning = '';
+    if (contractEnd) { const diffDays = Math.ceil((contractEnd - today) / (1000*60*60*24)); if (diffDays < 0) contractWarning = '<span class="expired-badge">انتهى العقد</span>'; else if (diffDays <= 30) contractWarning = `<span class="warning-badge">متبقي ${diffDays} يوم</span>`; }
+    rows += `<tr><td>${emp.name} ${contractWarning}</td><td>${emp.phone||''}</td><td>${emp.startDate||''}</td><td>${emp.contractEndDate||''}</td><td>${emp.createdAt||''}</td><td>${emp.totalAccrued.toFixed(2)}</td><td>${emp.totalPaid.toFixed(2)}</td><td>${remaining.toFixed(2)}</td><td><button class="edit-btn" onclick="openModal('personnel','${emp.id}')">✏️</button><button class="danger" onclick="deletePersonnel('${emp.id}')">🗑️</button></td></tr>`;
+  });
+  table.innerHTML = rows;
+}
+
+function deletePersonnel(id) { if (!confirm('حذف الموظف؟')) return; AppData.personnel = AppData.personnel.filter(e => e.id !== id); saveData(); renderContent(); showToast('تم الحذف'); }
+
+// ======================== المهام ========================
+function renderTasks(el) {
+  el.innerHTML = `<h2>المهام</h2><button onclick="openModal('task')">➕ مهمة جديدة</button><div id="taskList"></div>`;
+  document.getElementById('taskList').innerHTML = AppData.tasks.map(t => {
+    const phase = t.phaseId ? AppData.projects.find(p=>p.id===t.projectId)?.phases.find(ph=>ph.id===t.phaseId) : null;
+    return `<div class="card"><strong>${t.title}</strong> - ${t.projectName||'عام'} - ${phase?.name||'—'}<br>${t.personName||'غير محدد'} | ${t.cost} $ | ${t.done?'✅':'⏳'} | ${t.date||''} ${!t.done?`<button onclick="completeTask('${t.id}')">✔️ إنجاز</button>`:''} <button class="edit-btn" onclick="openModal('task','${t.id}')">✏️</button><button class="danger" onclick="deleteTask('${t.id}')">🗑️</button></div>`;
+  }).join('');
+}
+
+function completeTask(taskId) {
+  const task = AppData.tasks.find(t => t.id === taskId); if (!task || task.done) return; task.done = true;
+  if (task.personId) { const emp = AppData.personnel.find(e => e.id === task.personId); if (emp) emp.totalAccrued += task.cost; }
+  if (task.phaseId && task.projectId) { const proj = AppData.projects.find(p => p.id === task.projectId); if (proj) { const ph = proj.phases.find(p => p.id === task.phaseId); if (ph) ph.spent += task.cost; } }
+  genJE('5100', task.personId ? AppData.personnel.find(e=>e.id===task.personId)?.account : '1210', task.cost, 'مهمة: '+task.title);
+  saveData(); renderContent(); showToast('تم إنجاز المهمة');
+}
+
+function deleteTask(id) { if (!confirm('حذف المهمة؟')) return; AppData.tasks = AppData.tasks.filter(t => t.id !== id); saveData(); renderContent(); showToast('تم الحذف'); }
+
+// ======================== الروزنامة ========================
+function renderCalendar(el) {
+  el.innerHTML = `<h2>الروزنامة</h2><button onclick="openModal('calendar')">➕ روزنامة جديدة</button><div id="calList"></div>`;
+  document.getElementById('calList').innerHTML = AppData.calendarEntries.map(entry => {
+    const project = AppData.projects.find(p => p.id === entry.projectId);
+    return `<div class="card"><h3>${entry.crop} - ${entry.area} (${entry.plantDate})</h3><small>تاريخ الإنشاء: ${entry.createdAt||''}</small><table><tr><th>التاريخ</th><th>العملية</th><th>التكلفة</th><th>المرحلة</th><th>الموظف</th><th>حالة</th></tr>${entry.operations.map(op => { const phase = project?.phases.find(ph=>ph.id===op.phaseId); const emp = AppData.personnel.find(e=>e.id===op.personId); return `<tr><td>${op.date}</td><td>${op.desc}</td><td>${op.cost} $</td><td>${phase?.name||'—'}</td><td>${emp?.name||'—'}</td><td>${op.done?'✅':`<button onclick="completeCalendarOp('${entry.id}','${op.date}')">إنجاز</button>`}</td></tr>`; }).join('')}</table></div>`;
+  }).join('');
+}
+
+function completeCalendarOp(entryId, opDate) {
+  const entry = AppData.calendarEntries.find(e => e.id === entryId); if (!entry) return;
+  const op = entry.operations.find(o => o.date === opDate); if (!op || op.done) return; op.done = true;
+  AppData.tasks.push({ id: 't-cal-'+Date.now(), title: op.desc + ' (روزنامة)', cost: op.cost, projectId: entry.projectId, projectName: AppData.projects.find(p=>p.id===entry.projectId)?.name||'', personId: op.personId, personName: AppData.personnel.find(e=>e.id===op.personId)?.name||'', done: true, phaseId: op.phaseId, date: opDate, createdAt: new Date().toISOString().slice(0,10) });
+  if (op.personId) { const emp = AppData.personnel.find(e => e.id === op.personId); if (emp) emp.totalAccrued += op.cost; }
+  if (op.phaseId && entry.projectId) { const proj = AppData.projects.find(p => p.id === entry.projectId); if (proj) { const ph = proj.phases.find(p => p.id === op.phaseId); if (ph) ph.spent += op.cost; } }
+  genJE('5100', op.personId ? AppData.personnel.find(e=>e.id===op.personId)?.account : '1210', op.cost, 'عملية روزنامة: '+op.desc);
+  saveData(); renderContent(); showToast('تم إنجاز العملية');
+}
+
+// ======================== الموردون والمشتريات ========================
+function renderSuppliers(el) {
+  el.innerHTML = `<h2>الموردون والمشتريات</h2><button onclick="openModal('supplier')">➕ مورد جديد</button><table id="supTable"></table><h3>فواتير شراء البضاعة</h3><button onclick="openModal('purchaseInvoice')">➕ فاتورة شراء</button><button onclick="openModal('purchaseReturn')">🔙 مرتجع شراء</button><table id="purInvTable"></table>`;
+  document.getElementById('supTable').innerHTML = `<tr><th>الاسم</th><th>الحساب</th><th>تاريخ الإضافة</th><th></th></tr>${AppData.suppliers.map(s => `<tr><td>${s.name}</td><td>${s.account}</td><td>${s.createdAt||''}</td><td><button class="edit-btn" onclick="openModal('supplier','${s.id}')">✏️</button><button class="danger" onclick="deleteSupplier('${s.id}')">🗑️</button></td></tr>`).join('')}`;
+  document.getElementById('purInvTable').innerHTML = `<tr><th>التاريخ</th><th>النوع</th><th>المورد</th><th>المادة</th><th>الكمية</th><th>الإجمالي</th></tr>${[...AppData.purchaseInvoices.map(inv => ({...inv, type: 'شراء'})), ...AppData.purchaseReturns.map(inv => ({...inv, type: 'مرتجع'}))].map(inv => { const sup = AppData.suppliers.find(s => s.id === inv.supplierId); const item = AppData.inventory.find(i => i.id === inv.itemId); return `<tr><td>${inv.date}</td><td>${inv.type}</td><td>${sup?.name||''}</td><td>${item?.name||''}</td><td>${inv.quantity}</td><td>${inv.total}</td></tr>`; }).join('')}`;
+}
+
+function deleteSupplier(id) { if (!confirm('حذف المورد؟')) return; AppData.suppliers = AppData.suppliers.filter(s => s.id !== id); saveData(); renderContent(); showToast('تم الحذف'); }
+function toggleNewItemFields() { const select = document.getElementById('purItemSelect'); const newFields = document.getElementById('newItemFields'); if (newFields) newFields.style.display = select && select.value === 'new' ? 'block' : 'none'; }// ======================== المبيعات ========================
+function renderSales(el) {
+  el.innerHTML = `<h2>المبيعات</h2>
+    <button onclick="openModal('salesInvoice')">➕ فاتورة بيع</button>
+    <button onclick="openModal('salesReturn')">🔙 مرتجع بيع</button>
+    <h3>فواتير البيع</h3>
+    <table id="salesInvTable"></table>`;
+  document.getElementById('salesInvTable').innerHTML = `<tr><th>التاريخ</th><th>النوع</th><th>العميل</th><th>المادة</th><th>الكمية</th><th>الإجمالي</th><th>طريقة الدفع</th></tr>
+    ${[...AppData.salesInvoices.map(inv => ({...inv, type: 'بيع'})), ...AppData.salesReturns.map(inv => ({...inv, type: 'مرتجع بيع'}))].map(inv => {
+      const item = AppData.inventory.find(i => i.id === inv.itemId);
+      return `<tr><td>${inv.date}</td><td>${inv.type}</td><td>${inv.customerName||''}</td><td>${item?.name||''}</td><td>${inv.quantity}</td><td>${inv.total}</td><td>${inv.paymentMethod||''}</td></tr>`;
+    }).join('')}`;
+}
+
+// ======================== الخدمات ========================
+function renderServices(el) {
+  el.innerHTML = `<h2>الخدمات</h2>
+    <button onclick="openModal('servicePurchaseInvoice')">🧾 شراء خدمات</button>
+    <button onclick="openModal('servicePurchaseReturn')">🔙 مرتجع شراء خدمات</button>
+    <button onclick="openModal('serviceSalesInvoice')">💰 بيع خدمات</button>
+    <button onclick="openModal('serviceSalesReturn')">🔙 مرتجع بيع خدمات</button>
+    <h3>فواتير شراء الخدمات</h3><table id="svcPurTable"></table>
+    <h3>فواتير بيع الخدمات</h3><table id="svcSalesTable"></table>`;
+  document.getElementById('svcPurTable').innerHTML = `<tr><th>التاريخ</th><th>النوع</th><th>المورد</th><th>الوصف</th><th>الحساب</th><th>الإجمالي</th></tr>
+    ${[...AppData.servicePurchaseInvoices.map(inv => ({...inv, type: 'شراء'})), ...AppData.servicePurchaseReturns.map(inv => ({...inv, type: 'مرتجع'}))].map(inv => {
+      const sup = AppData.suppliers.find(s => s.id === inv.supplierId);
+      return `<tr><td>${inv.date}</td><td>${inv.type}</td><td>${sup?.name||''}</td><td>${inv.description||''}</td><td>${inv.expenseAccount||''}</td><td>${inv.total}</td></tr>`;
+    }).join('')}`;
+  document.getElementById('svcSalesTable').innerHTML = `<tr><th>التاريخ</th><th>النوع</th><th>العميل</th><th>الوصف</th><th>الحساب</th><th>الإجمالي</th><th>طريقة الدفع</th></tr>
+    ${[...AppData.serviceSalesInvoices.map(inv => ({...inv, type: 'بيع'})), ...AppData.serviceSalesReturns.map(inv => ({...inv, type: 'مرتجع'}))].map(inv => {
+      return `<tr><td>${inv.date}</td><td>${inv.type}</td><td>${inv.customerName||''}</td><td>${inv.description||''}</td><td>${inv.incomeAccount||''}</td><td>${inv.total}</td><td>${inv.paymentMethod||''}</td></tr>`;
+    }).join('')}`;
+}
+
+// ======================== العقود (مع أنواع جديدة وتاريخ) ========================
+function renderContracts(el) {
+  el.innerHTML = `<h2>العقود</h2><button onclick="openModal('contract')">➕ عقد جديد</button><div id="contractList"></div>`;
+  document.getElementById('contractList').innerHTML = AppData.contracts.map(c => `
+    <div class="card">
+      <strong>${c.title}</strong> (${c.party})<br>النوع: ${c.type} | الإجمالي: ${c.totalAmount} $ | المدفوع: ${c.paid} $ | المتبقي: ${c.totalAmount - c.paid} $<br>تاريخ الإنشاء: ${c.createdAt||''}
+      <button onclick="payContract('${c.id}')">💵 دفعة</button>
+      <button class="edit-btn" onclick="openModal('contract','${c.id}')">✏️</button>
+      <button class="danger" onclick="deleteContract('${c.id}')">🗑️</button>
+    </div>`).join('');
+}
+
+function payContract(contractId) {
+  const contract = AppData.contracts.find(c => c.id === contractId);
+  const remaining = contract.totalAmount - contract.paid;
+  const amount = parseFloat(prompt(`المبلغ (المتبقي: ${remaining})`, remaining));
+  if (isNaN(amount) || amount <= 0 || amount > remaining) return;
+  contract.paid += amount;
+  genJE(contract.account, '1210', amount, 'دفعة عقد ' + contract.title);
+  addTreasuryMovement('مدفوعات', amount, 'دفعة عقد ' + contract.title, contract.account);
+  saveData(); renderContent(); showToast('تم الدفع');
+}
+
+function deleteContract(id) {
+  if (!confirm('حذف العقد؟')) return;
+  AppData.contracts = AppData.contracts.filter(c => c.id !== id);
+  saveData(); renderContent(); showToast('تم الحذف');
+}
+
+function toggleNewContractType() {
+  const select = document.getElementById('contractType');
+  const input = document.getElementById('newContractType');
+  if (input) input.style.display = select && select.value === '__new__' ? 'block' : 'none';
+}
+
+// ======================== الأصول والصيانة ========================
+function renderAssets(el) {
+  el.innerHTML = `<h2>الأصول والصيانة</h2><button onclick="openModal('asset')">➕ أصل جديد</button><table id="astTable"></table>
+    <h3>سجل الصيانة</h3><button onclick="openModal('maintenance')">➕ تسجيل صيانة</button><table id="maintTable"></table>`;
+  document.getElementById('astTable').innerHTML = `<tr><th>الأصل</th><th>حساب الأصل</th><th>حساب الصيانة</th><th>تاريخ الإنشاء</th><th></th></tr>
+    ${AppData.assets.map(a => `<tr><td>${a.name}</td><td>${a.account}</td><td>${a.maintenanceAccount}</td><td>${a.createdAt||''}</td>
+      <td><button class="edit-btn" onclick="openModal('asset','${a.id}')">✏️</button><button class="danger" onclick="deleteAsset('${a.id}')">🗑️</button></td></tr>`).join('')}`;
+  document.getElementById('maintTable').innerHTML = `<tr><th>التاريخ</th><th>الأصل</th><th>الوصف</th><th>التكلفة</th></tr>
+    ${AppData.maintenanceLog.map(m => {
+      const asset = AppData.assets.find(a => a.id === m.assetId);
+      return `<tr><td>${m.date}</td><td>${asset?.name||''}</td><td>${m.desc}</td><td>${m.cost}</td></tr>`;
+    }).join('')}`;
+}
+
+function deleteAsset(id) {
+  if (!confirm('حذف الأصل؟')) return;
+  AppData.assets = AppData.assets.filter(a => a.id !== id);
+  saveData(); renderContent(); showToast('تم الحذف');
+}
+
+// ======================== التدريب (مع مكتبة وسائط من الجهاز) ========================
+function renderTraining(el) {
+  el.innerHTML = `<h2>التدريب</h2><button onclick="openModal('training')">➕ دورة جديدة</button><div id="trainingList"></div>`;
+  document.getElementById('trainingList').innerHTML = AppData.training.map(t => {
+    const mediaItems = AppData.trainingMedia.filter(m => m.trainingId === t.id);
+    let mediaHtml = '';
+    if (mediaItems.length > 0) {
+      mediaHtml = '<div style="margin-top:10px; border-top:1px solid #eee; padding-top:10px;"><strong>📂 مكتبة المحتوى:</strong><div style="display:flex; gap:15px; flex-wrap:wrap; margin-top:8px;">';
+      mediaItems.forEach(m => {
+        if (m.type === 'image') mediaHtml += `<div style="text-align:center;"><img src="${m.url}" style="max-width:100px; max-height:100px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.1);" title="${m.title}"><br><small>${m.title}</small></div>`;
+        else if (m.type === 'video') mediaHtml += `<div style="text-align:center;"><video src="${m.url}" controls style="max-width:150px; border-radius:8px;" title="${m.title}"></video><br><small>${m.title}</small></div>`;
+        else if (m.type === 'document') mediaHtml += `<div style="text-align:center; background:#f5f5f5; padding:10px; border-radius:8px;"><a href="${m.url}" target="_blank" title="${m.title}" style="text-decoration:none; color:var(--primary);">📄 ${m.title}</a></div>`;
+        mediaHtml += `<button class="danger" onclick="deleteTrainingMedia('${m.id}')" style="font-size:10px; padding:2px 6px; margin-top:4px;">🗑️</button>`;
+      });
+      mediaHtml += '</div></div>';
+    }
+    return `<div class="card">
+      <strong>${t.title}</strong> (${t.date})<br><p>${t.description}</p>
+      <p>المدرب: ${t.trainer||''} | التكلفة: ${t.cost||0} $</p>
+      ${mediaHtml}
+      <button onclick="openTrainingMediaModal('${t.id}')">➕ إضافة وسيط</button>
+      <button class="edit-btn" onclick="openModal('training','${t.id}')">✏️</button>
+      <button class="danger" onclick="deleteTraining('${t.id}')">🗑️</button>
+    </div>`;
+  }).join('');
+}
+
+function openTrainingMediaModal(trainingId) {
+  const modal = document.getElementById('genericModal'); const content = document.getElementById('modalContent');
+  content.innerHTML = `<h3>إضافة وسيط تدريبي</h3>
+    <select id="mediaType"><option value="video">فيديو</option><option value="image">صورة</option><option value="document">مستند</option></select>
+    <input type="file" id="mediaFileInput" accept="video/*,image/*,.pdf,.doc,.docx,.xls,.xlsx" onchange="handleMediaFileSelect(this)">
+    <input id="mediaUrl" placeholder="أو رابط الوسيط (إن لم تختر ملفاً)">
+    <input id="mediaTitle" placeholder="عنوان الوسيط">
+    <input type="hidden" id="mediaTrainingId" value="${trainingId}">
+    <button onclick="saveTrainingMediaFromModal()">حفظ</button>
+    <button class="secondary" onclick="closeModal()">إلغاء</button>`;
+  modal.classList.add('active');
+}
+
+function saveTrainingMediaFromModal() {
+  const trainingId = document.getElementById('mediaTrainingId').value;
+  const type = document.getElementById('mediaType').value;
+  const title = document.getElementById('mediaTitle').value.trim();
+  const url = document.getElementById('mediaUrl').value.trim();
+  const fileInput = document.getElementById('mediaFileInput');
+  if (fileInput && fileInput.files && fileInput.files[0]) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      addTrainingMedia(trainingId, type, e.target.result, title || fileInput.files[0].name);
+      closeModal(); renderContent(); showToast('تمت إضافة الوسيط من الملف');
+    };
+    reader.readAsDataURL(fileInput.files[0]);
+  } else if (url) {
+    addTrainingMedia(trainingId, type, url, title || 'وسيط');
+    closeModal(); renderContent(); showToast('تمت إضافة الوسيط');
+  } else {
+    showToast('يرجى اختيار ملف أو إدخال رابط');
+  }
+}
+
+function handleMediaFileSelect(input) { /* اختياري للمعاينة */ }
+
+function deleteTraining(id) {
+  if (!confirm('حذف الدورة؟')) return;
+  AppData.training = AppData.training.filter(t => t.id !== id);
+  AppData.trainingMedia = AppData.trainingMedia.filter(m => m.trainingId !== id);
+  saveData(); renderContent(); showToast('تم الحذف');
+}
+
+// ======================== المعرفة ========================
+function renderKnowledge(el) {
+  el.innerHTML = `<h2>المعرفة</h2><button onclick="openModal('knowledge')">➕ ملاحظة جديدة</button><div id="knowledgeList"></div>`;
+  document.getElementById('knowledgeList').innerHTML = AppData.knowledge.map(k => `
+    <div class="card">
+      <p>${k.content}</p>
+      <span class="badge">${k.tags}</span>
+      <small>${k.createdAt||''}</small>
+      <button class="edit-btn" onclick="openModal('knowledge','${k.id}')">✏️</button>
+      <button class="danger" onclick="deleteKnowledge('${k.id}')">🗑️</button>
+    </div>`).join('');
+}
+
+function deleteKnowledge(id) {
+  if (!confirm('حذف الملاحظة؟')) return;
+  AppData.knowledge = AppData.knowledge.filter(k => k.id !== id);
+  saveData(); renderContent(); showToast('تم الحذف');
+}
+
+// ======================== القنوات التفاعلية ========================
+function renderChannels(el) {
+  el.innerHTML = `<h2>القنوات التفاعلية</h2>
+    <div class="card"><textarea id="channelMsg" placeholder="اكتب رسالة... (استخدم /مهمة لإنشاء مهمة)"></textarea><button onclick="sendChannelMessage()">إرسال</button></div>
+    <div id="channelMessages"></div>`;
+  document.getElementById('channelMessages').innerHTML = AppData.channels.map(msg => `
+    <div class="card"><strong>${msg.timestamp}</strong>: ${msg.text}</div>`).join('');
+}
+
+function sendChannelMessage() {
+  const text = document.getElementById('channelMsg').value.trim();
+  if (!text) return;
+  const timestamp = new Date().toLocaleString();
+  AppData.channels.push({ id: 'msg'+Date.now(), text, timestamp });
+  if (text.startsWith('/مهمة')) {
+    const taskDesc = text.replace('/مهمة', '').trim();
+    if (taskDesc) {
+      AppData.tasks.push({ id: 't'+Date.now(), title: taskDesc, cost: 0, projectId: null, phaseId: null, personId: null, done: false, projectName: '', personName: '', date: new Date().toISOString().slice(0,10), createdAt: new Date().toISOString().slice(0,10) });
+      showToast('تم إنشاء مهمة: ' + taskDesc);
+    }
+  }
+  saveData(); renderContent();
+}
+
+// ======================== الإعدادات ========================
+function renderSettings(el) {
+  el.innerHTML = `<h2>الإعدادات</h2>
+    <div class="card">
+      <h3>تصدير واستيراد البيانات</h3>
+      <button onclick="exportData()">📤 تصدير JSON</button>
+      <button onclick="document.getElementById('importFile').click()">📥 استيراد JSON</button>
+      <input type="file" id="importFile" style="display:none" onchange="importData(this)">
+    </div>`;
+}
+
+function exportData() {
+  const dataStr = JSON.stringify(AppData, null, 2);
+  const blob = new Blob([dataStr], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'agrios_backup_' + new Date().toISOString().slice(0,10) + '.json';
+  a.click(); URL.revokeObjectURL(url);
+  showToast('تم تصدير البيانات');
+}
+
+function importData(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      Object.assign(AppData, data);
+      saveData(); renderContent();
+      showToast('تم استيراد البيانات بنجاح');
+    } catch (err) { showToast('خطأ في الملف'); }
+  };
+  reader.readAsText(file);
+}
+
+// ======================== التقارير التفاعلية (مع فلاتر وتقارير مخصصة) ========================
+function renderReports(el) {
+  el.innerHTML = `<h2>التقارير التفاعلية</h2>
+    <div class="flex-row" style="margin-bottom:20px;">
+      <select id="reportType" onchange="applyReportFilter()">
+        <option value="all">كل المعاملات</option>
+        <option value="sales">المبيعات</option>
+        <option value="purchases">المشتريات</option>
+        <option value="services">الخدمات</option>
+        <option value="treasury">الخزينة</option>
+        <option value="banks">البنوك</option>
+        <option value="checks">الشيكات</option>
+        <option value="tasks">المهام</option>
+        <option value="inventory">المخزون</option>
+        <option value="budget">الميزانيات</option>
+        <option value="cashflow">التدفقات النقدية</option>
+      </select>
+      <input type="date" id="reportDateFrom" onchange="applyReportFilter()" placeholder="من تاريخ">
+      <input type="date" id="reportDateTo" onchange="applyReportFilter()" placeholder="إلى تاريخ">
+      <button onclick="applyReportFilter()">🔍 تطبيق الفلتر</button>
+      <button onclick="printReport()">🖨️ طباعة</button>
+    </div>
+    <div id="reportResults"></div>`;
+  applyReportFilter();
+}
+
+function applyReportFilter() {
+  const type = document.getElementById('reportType')?.value || 'all';
+  const from = document.getElementById('reportDateFrom')?.value || '';
+  const to = document.getElementById('reportDateTo')?.value || '';
+  let results = [];
+  
+  function getItemDate(item) {
+    return item.date || item.dueDate || item.startDate || item.plantDate || item.createdAt || '';
+  }
+  
+  function matchItemDate(item) {
+    const itemDate = getItemDate(item);
+    if (!itemDate) return !from && !to;
+    if (from && itemDate < from) return false;
+    if (to && itemDate > to) return false;
+    return true;
+  }
+  
+  if (type === 'all' || type === 'sales') {
+    AppData.salesInvoices.forEach(inv => { if (matchItemDate(inv)) results.push({...inv, category: 'مبيعات بضاعة', displayDate: inv.date, total: inv.total, desc: inv.customerName||''}); });
+    AppData.salesReturns.forEach(inv => { if (matchItemDate(inv)) results.push({...inv, category: 'مرتجع مبيعات', displayDate: inv.date, total: -inv.total, desc: inv.customerName||''}); });
+  }
+  if (type === 'all' || type === 'purchases') {
+    AppData.purchaseInvoices.forEach(inv => { if (matchItemDate(inv)) results.push({...inv, category: 'مشتريات بضاعة', displayDate: inv.date, total: inv.total, desc: AppData.suppliers.find(s=>s.id===inv.supplierId)?.name||''}); });
+    AppData.purchaseReturns.forEach(inv => { if (matchItemDate(inv)) results.push({...inv, category: 'مرتجع مشتريات', displayDate: inv.date, total: -inv.total, desc: AppData.suppliers.find(s=>s.id===inv.supplierId)?.name||''}); });
+  }
+  if (type === 'all' || type === 'services') {
+    AppData.serviceSalesInvoices.forEach(inv => { if (matchItemDate(inv)) results.push({...inv, category: 'بيع خدمات', displayDate: inv.date, total: inv.total, desc: inv.description||''}); });
+    AppData.serviceSalesReturns.forEach(inv => { if (matchItemDate(inv)) results.push({...inv, category: 'مرتجع بيع خدمات', displayDate: inv.date, total: -inv.total, desc: inv.description||''}); });
+    AppData.servicePurchaseInvoices.forEach(inv => { if (matchItemDate(inv)) results.push({...inv, category: 'شراء خدمات', displayDate: inv.date, total: inv.total, desc: inv.description||''}); });
+    AppData.servicePurchaseReturns.forEach(inv => { if (matchItemDate(inv)) results.push({...inv, category: 'مرتجع شراء خدمات', displayDate: inv.date, total: -inv.total, desc: inv.description||''}); });
+  }
+  if (type === 'all' || type === 'treasury') {
+    AppData.treasury.transactions.forEach(t => { if (matchItemDate(t)) results.push({...t, category: 'خزينة', displayDate: t.date, total: t.type==='مقبوضات'?t.amount:-t.amount, desc: t.desc}); });
+  }
+  if (type === 'all' || type === 'banks') {
+    AppData.bankTransactions.forEach(t => { if (matchItemDate(t)) results.push({...t, category: 'حركة بنكية', displayDate: t.date, total: t.type==='إيداع'?t.amount:-t.amount, desc: t.desc}); });
+  }
+  if (type === 'all' || type === 'checks') {
+    AppData.checks.forEach(c => { if (matchItemDate(c)) results.push({...c, category: 'شيكات', displayDate: c.dueDate, total: c.amount, desc: `شيك ${c.checkNumber}`}); });
+  }
+  if (type === 'all' || type === 'tasks') {
+    AppData.tasks.forEach(t => { if (matchItemDate(t)) results.push({...t, category: 'مهام', displayDate: t.date||t.createdAt||'', total: t.cost, desc: t.title}); });
+  }
+  if (type === 'all' || type === 'inventory') {
+    AppData.inventory.forEach(i => { results.push({...i, category: 'مخزون', displayDate: i.createdAt||'', total: i.quantity, desc: i.name}); });
+  }
+  if (type === 'budget') {
+    AppData.projects.forEach(p => {
+      const spent = p.phases.reduce((s, ph) => s + ph.spent, 0);
+      results.push({ category: 'ميزانية مشروع', displayDate: p.createdAt||'', desc: p.name, total: p.budget, spent: spent, remaining: p.budget - spent });
+    });
+  }
+  if (type === 'cashflow') {
+    const allTransactions = [
+      ...AppData.treasury.transactions.map(t => ({...t, source: 'خزينة'})),
+      ...AppData.bankTransactions.map(t => ({...t, source: 'بنك'}))
+    ];
+    allTransactions.sort((a,b) => (a.date||'').localeCompare(b.date||''));
+    let runningBalance = 0;
+    allTransactions.forEach(t => {
+      const amount = t.type === 'إيداع' || t.type === 'مقبوضات' ? t.amount : -t.amount;
+      runningBalance += amount;
+      if (matchItemDate(t)) {
+        results.push({ category: 'تدفق نقدي', displayDate: t.date, desc: t.desc || `${t.source} - ${t.type}`, total: amount, balance: runningBalance });
+      }
+    });
+  }
+  
+  results.sort((a,b) => (b.displayDate||'').localeCompare(a.displayDate||''));
+  const total = results.reduce((s, r) => s + (r.total||0), 0);
+  let tableRows = '';
+  
+  if (type === 'budget') {
+    tableRows = results.map(r => `<tr><td>${r.displayDate||''}</td><td>${r.desc}</td><td>${r.total.toFixed(2)}</td><td>${(r.spent||0).toFixed(2)}</td><td>${(r.remaining||0).toFixed(2)}</td><td>${r.total > 0 ? Math.round(((r.spent||0)/r.total)*100) : 0}%</td></tr>`).join('');
+    document.getElementById('reportResults').innerHTML = `<div class="card"><h3>تقرير الميزانيات (${results.length} مشروع)</h3><table><tr><th>تاريخ الإنشاء</th><th>المشروع</th><th>الميزانية</th><th>المصروف</th><th>المتبقي</th><th>نسبة الصرف</th></tr>${tableRows}</table></div>`;
+  } else if (type === 'cashflow') {
+    tableRows = results.map(r => `<tr><td>${r.displayDate||''}</td><td>${r.desc}</td><td style="color:${(r.total||0)>=0?'green':'red'}">${(r.total||0).toFixed(2)}</td><td>${(r.balance||0).toFixed(2)}</td></tr>`).join('');
+    document.getElementById('reportResults').innerHTML = `<div class="card"><h3>التدفقات النقدية (${results.length} حركة)</h3><table><tr><th>التاريخ</th><th>الوصف</th><th>المبلغ</th><th>الرصيد التراكمي</th></tr>${tableRows}</table></div>`;
+  } else {
+    tableRows = results.map(r => `<tr><td>${r.displayDate||'-'}</td><td>${r.category||''}</td><td>${r.desc||''}</td><td style="color:${(r.total||0)>=0?'green':'red'}">${(r.total||0).toFixed(2)}</td></tr>`).join('');
+    document.getElementById('reportResults').innerHTML = `<div class="card"><h3>النتائج (${results.length} عنصر، الإجمالي: ${total.toFixed(2)})</h3><table><tr><th>التاريخ</th><th>النوع</th><th>الوصف</th><th>المبلغ</th></tr>${tableRows}</table></div>`;
+  }
+}
+
+function matchItemDate(item) {
+  const itemDate = item.date || item.dueDate || item.startDate || item.plantDate || item.createdAt || '';
+  if (!itemDate) return !from && !to;
+  if (from && itemDate < from) return false;
+  if (to && itemDate > to) return false;
+  return true;
+}
+
+function printReport() {
+  const content = document.getElementById('reportResults').innerHTML;
+  const win = window.open('', '', 'width=800,height=600');
+  win.document.write('<html><head><title>تقرير AgriOS</title><style>table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;text-align:right}th{background:#f0f7f0}</style></head><body>');
+  win.document.write(content);
+  win.document.write('</body></html>');
+  win.document.close();
+  win.print();
+}// ======================== النوافذ المنبثقة العامة ========================
+function openModal(type, id = null) {
+  const modal = document.getElementById('genericModal'); const content = document.getElementById('modalContent');
+  let html = '';
+  if (type === 'treasuryMovement') {
+    html = `<h3>حركة خزينة</h3><select id="movType"><option>مقبوضات</option><option>مدفوعات</option></select><input id="movAmount" type="number" placeholder="المبلغ"><input id="movDesc" placeholder="الوصف"><div id="movAccountSelector">${renderAccountSelectorHTML('', '', 'الحساب المرتبط')}</div><button onclick="saveTreasuryMovement()">حفظ</button>`;
+  } else if (type === 'check') {
+    const c = id ? AppData.checks.find(x => x.id === id) : null;
+    html = `<h3>${id ? 'تعديل شيك' : 'إضافة شيك'}</h3><input id="chkNumber" placeholder="رقم الشيك" value="${c?.checkNumber||''}"><div style="display:flex; gap:10px;"><select id="chkBank" style="flex:1;">${AppData.banks.map(b => `<option value="${b.id}" ${c?.bankId===b.id?'selected':''}>${b.name}</option>`).join('')}</select><button type="button" onclick="openModal('bank')" style="width:auto; white-space:nowrap;">➕ بنك جديد</button></div><select id="chkType"><option value="مستلم" ${c?.type==='مستلم'?'selected':''}>📥 مستلم</option><option value="واجب الدفع" ${c?.type==='واجب الدفع'?'selected':''}>📤 واجب الدفع</option></select><input id="chkFromTo" placeholder="${c?.type==='مستلم'?'من':'إلى'}" value="${c?.from||c?.to||''}"><input id="chkAmount" type="number" placeholder="المبلغ" value="${c?.amount||''}"><input id="chkDueDate" type="date" value="${c?.dueDate||''}"><div id="chkAccountSelector">${renderAccountSelectorHTML('', c?.relatedAccount||'', 'الحساب المرتبط')}</div><input type="hidden" id="chkId" value="${id||''}"><button onclick="saveCheck()">حفظ</button>`;
+  } else if (type === 'bank') {
+    const b = id ? AppData.banks.find(x => x.id === id) : null;
+    html = `<h3>${id ? 'تعديل بنك' : 'حساب بنكي جديد'}</h3><input id="bankName" placeholder="اسم البنك" value="${b?.name||''}"><div id="bankAccountSelector">${renderAccountSelectorHTML('1210', b?.account||'')}</div><input type="hidden" id="editId" value="${id||''}"><button onclick="saveBank()">حفظ</button>`;
+  } else if (type === 'bankTransaction') {
+    html = `<h3>حركة بنكية</h3><select id="btType"><option>إيداع</option><option>سحب</option></select><input id="btAmount" type="number" placeholder="المبلغ"><input id="btDesc" placeholder="الوصف"><input type="hidden" id="btBankId" value="${id}"><button onclick="saveBankTransaction()">حفظ</button>`;
+  } else if (type === 'bankReconciliation') {
+    const bank = AppData.banks.find(b => b.id === id);
+    const balance = AppData.bankTransactions.filter(t => t.bankId === id).reduce((s, t) => s + (t.type === 'إيداع' ? t.amount : -t.amount), 0);
+    html = `<h3>تسوية بنك ${bank?.name||''}</h3><p>الرصيد الدفتري الحالي: <strong>${balance.toFixed(2)} $</strong></p><input id="recActualBalance" type="number" placeholder="الرصيد الفعلي (من كشف البنك)" step="0.01"><input id="recBankFees" type="number" placeholder="مصروفات بنكية (اختياري)" value="0" step="0.01"><input id="recBankRevenue" type="number" placeholder="إيرادات بنكية (اختياري)" value="0" step="0.01"><input id="recDesc" placeholder="وصف التسوية (اختياري)" value="${new Date().toISOString().split('T')[0]}"><input type="hidden" id="recBankId" value="${id}"><button onclick="saveBankReconciliation()">حفظ التسوية</button>`;
+  } else if (type === 'personnel') {
+    const emp = id ? AppData.personnel.find(x => x.id === id) : null;
+    html = `<h3>${id?'تعديل موظف':'موظف جديد'}</h3><input id="empName" placeholder="الاسم" value="${emp?.name||''}"><input id="empPhone" placeholder="الهاتف" value="${emp?.phone||''}"><input id="empAddress" placeholder="العنوان" value="${emp?.address||''}"><input id="empNationalId" placeholder="الرقم الوطني" value="${emp?.nationalId||''}"><input id="empBirthDate" type="date" value="${emp?.birthDate||''}"><input id="empStartDate" type="date" value="${emp?.startDate||''}"><input id="empContractEnd" type="date" value="${emp?.contractEndDate||''}"><input id="empVacation" type="number" value="${emp?.vacationDays||0}" placeholder="الإجازات"><label>صورة إثبات:</label><input type="file" id="empImage" accept="image/*" onchange="encodeImage(this)"><img id="empImagePreview" src="${emp?.image||''}" style="max-width:100px; display:${emp?.image?'block':'none'}"><div id="empAccountSelector">${renderAccountSelectorHTML('2310', emp?.account||'')}</div><input type="hidden" id="editId" value="${id||''}"><input type="hidden" id="empImageData" value="${emp?.image||''}"><button onclick="savePersonnel()">حفظ</button>`;
+  } else if (type === 'project') {
+    const p = id ? AppData.projects.find(x => x.id === id) : null;
+    html = `<h3>${id?'تعديل مشروع':'مشروع جديد'}</h3><input id="projName" placeholder="اسم المشروع" value="${p?.name||''}"><input id="projBudget" type="number" value="${p?.budget||''}"><div id="projBudgetAccountSelector">${renderAccountSelectorHTML('1240', p?.budgetAccount||'')}</div><input id="projLocation" placeholder="الموقع" value="${p?.location||''}"><input id="projCrop" placeholder="المحصول" value="${p?.crop||''}"><div id="projStoreAccountSelector">${renderAccountSelectorHTML('5200', p?.produceStoreAccount||'')}</div><input type="hidden" id="editId" value="${id||''}"><button onclick="saveProject()">حفظ</button>`;
+  } else if (type === 'inventory') {
+    const inv = id ? AppData.inventory.find(x => x.id === id) : null;
+    html = `<h3>${id?'تعديل مادة':'مادة جديدة'}</h3><input id="invName" placeholder="اسم المادة" value="${inv?.name||''}"><select id="invCategory"><option>مادة خام</option><option>أسمدة</option><option>مبيدات</option><option>وقود</option><option>أدوات</option><option>إنتاج جاهز</option></select><input id="invQty" type="number" value="${inv?.quantity||''}"><input id="invUnit" value="${inv?.unit||''}"><input id="invExpiry" type="date" value="${inv?.expiryDate||''}"><div id="invAccountSelector">${renderAccountSelectorHTML('5100', inv?.expenseAccount||'')}</div><input type="hidden" id="editId" value="${id||''}"><button onclick="saveInventory()">حفظ</button>`;
+  } else if (type === 'task') {
+    const t = id ? AppData.tasks.find(x => x.id === id) : null;
+    const project = AppData.projects.find(p => p.id === (t?.projectId || window.selectedProjectId));
+    html = `<h3>${id?'تعديل مهمة':'مهمة جديدة'}</h3><input id="taskTitle" placeholder="وصف المهمة" value="${t?.title||''}"><input id="taskCost" type="number" value="${t?.cost||''}"><select id="taskProject"><option value="">بدون مشروع</option>${AppData.projects.map(p=>`<option value="${p.id}" ${(t?.projectId||window.selectedProjectId)===p.id?'selected':''}>${p.name}</option>`).join('')}</select><select id="taskPhase"><option value="">بدون مرحلة</option>${project?project.phases.map(ph=>`<option value="${ph.id}" ${t?.phaseId===ph.id?'selected':''}>${ph.name}</option>`).join(''):''}</select><select id="taskEmployee"><option value="">بدون موظف</option>${AppData.personnel.map(e=>`<option value="${e.id}" ${t?.personId===e.id?'selected':''}>${e.name}</option>`).join('')}</select><input id="taskDate" type="date" value="${t?.date||''}"><input type="hidden" id="editId" value="${id||''}"><button onclick="saveTask()">حفظ</button>`;
+  } else if (type === 'calendar') {
+    html = `<h3>روزنامة جديدة</h3><select id="calProject">${AppData.projects.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</select><input id="calArea" placeholder="المساحة"><input id="calPlantDate" type="date"><button onclick="saveCalendar()">توليد</button>`;
+  } else if (type === 'supplier') {
+    const s = id ? AppData.suppliers.find(x => x.id === id) : null;
+    html = `<h3>${id ? 'تعديل مورد' : 'مورد جديد'}</h3><input id="supName" placeholder="اسم المورد" value="${s?.name||''}"><div id="supAccountSelector">${renderAccountSelectorHTML('2210', s?.account||'')}</div><input type="hidden" id="editId" value="${id||''}"><button onclick="saveSupplier()">حفظ</button>`;
+  } else if (type === 'purchaseInvoice') {
+    html = `<h3>فاتورة شراء بضاعة</h3><select id="purSupplier">${AppData.suppliers.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}</select><select id="purItemSelect" onchange="toggleNewItemFields()"><option value="">اختر مادة...</option>${AppData.inventory.map(i => `<option value="${i.id}">${i.name}</option>`).join('')}<option value="new">➕ إنشاء مادة جديدة</option></select><div id="newItemFields" style="display:none;"><input id="newItemName" placeholder="اسم المادة الجديدة"><select id="newItemCategory"><option>مادة خام</option><option>أسمدة</option><option>مبيدات</option><option>وقود</option><option>أدوات</option></select><input id="newItemUnit" placeholder="وحدة القياس"><div id="newItemAccount">${renderAccountSelectorHTML('5100')}</div></div><input id="purQty" type="number" placeholder="الكمية"><input id="purPrice" type="number" placeholder="سعر الوحدة"><input id="purDate" type="date" value="${new Date().toISOString().split('T')[0]}"><button onclick="savePurchaseInvoice()">حفظ</button>`;
+  } else if (type === 'purchaseReturn') {
+    html = `<h3>مرتجع شراء</h3><select id="retPurSupplier">${AppData.suppliers.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}</select><select id="retPurItem">${AppData.inventory.map(i => `<option value="${i.id}">${i.name}</option>`).join('')}</select><input id="retPurQty" type="number" placeholder="الكمية المرتجعة"><input id="retPurPrice" type="number" placeholder="سعر الوحدة"><input id="retPurDate" type="date" value="${new Date().toISOString().split('T')[0]}"><button onclick="savePurchaseReturn()">حفظ</button>`;
+  } else if (type === 'salesInvoice') {
+    html = `<h3>فاتورة بيع بضاعة</h3><select id="salesItemSelect" onchange="toggleNewSalesItemFields()"><option value="">اختر مادة...</option>${AppData.inventory.map(i => `<option value="${i.id}">${i.name}</option>`).join('')}<option value="new">➕ إنشاء مادة جديدة</option></select><div id="newSalesItemFields" style="display:none;"><input id="newSalesItemName" placeholder="اسم المادة الجديدة"><select id="newSalesItemCategory"><option>مادة خام</option><option>أسمدة</option><option>مبيدات</option><option>وقود</option><option>أدوات</option><option>إنتاج جاهز</option></select><input id="newSalesItemUnit" placeholder="وحدة القياس"><div id="newSalesItemAccount">${renderAccountSelectorHTML('5100')}</div></div><input id="salesCustName" placeholder="اسم العميل"><div id="salesCustAccountSelector">${renderAccountSelectorHTML('1230', '', 'حساب العميل (اختياري)')}</div><select id="salesPaymentMethod"><option value="نقدي">نقدي</option><option value="آجل">آجل</option></select><input id="salesQty" type="number" placeholder="الكمية"><input id="salesPrice" type="number" placeholder="سعر البيع للوحدة"><input id="salesDate" type="date" value="${new Date().toISOString().split('T')[0]}"><button onclick="saveSalesInvoice()">حفظ</button>`;
+  } else if (type === 'salesReturn') {
+    html = `<h3>مرتجع بيع</h3><select id="retSalesItem">${AppData.inventory.map(i => `<option value="${i.id}">${i.name}</option>`).join('')}</select><input id="retSalesCustName" placeholder="اسم العميل"><input id="retSalesQty" type="number" placeholder="الكمية المرتجعة"><input id="retSalesPrice" type="number" placeholder="سعر الوحدة"><input id="retSalesDate" type="date" value="${new Date().toISOString().split('T')[0]}"><button onclick="saveSalesReturn()">حفظ</button>`;
+  } else if (type === 'servicePurchaseInvoice') {
+    html = `<h3>فاتورة شراء خدمات</h3><select id="svcPurSupplier">${AppData.suppliers.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}</select><input id="svcPurDesc" placeholder="وصف الخدمة"><div id="svcPurAccountSelector">${renderAccountSelectorHTML('', '', 'اختر حساب المصروف')}</div><input id="svcPurTotal" type="number" placeholder="المبلغ"><input id="svcPurDate" type="date" value="${new Date().toISOString().split('T')[0]}"><button onclick="saveServicePurchaseInvoice()">حفظ</button>`;
+  } else if (type === 'servicePurchaseReturn') {
+    html = `<h3>مرتجع شراء خدمات</h3><select id="retSvcPurSupplier">${AppData.suppliers.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}</select><input id="retSvcPurDesc" placeholder="وصف الخدمة"><div id="retSvcPurAccountSelector">${renderAccountSelectorHTML('', '', 'اختر حساب المصروف')}</div><input id="retSvcPurTotal" type="number" placeholder="المبلغ المرتجع"><input id="retSvcPurDate" type="date" value="${new Date().toISOString().split('T')[0]}"><button onclick="saveServicePurchaseReturn()">حفظ</button>`;
+  } else if (type === 'serviceSalesInvoice') {
+    html = `<h3>فاتورة بيع خدمات</h3><input id="svcSalesDesc" placeholder="وصف الخدمة"><input id="svcSalesCustName" placeholder="اسم العميل"><div id="svcSalesAccountSelector">${renderAccountSelectorHTML('4200', '', 'حساب الإيراد')}</div><select id="svcSalesPaymentMethod"><option value="نقدي">نقدي</option><option value="آجل">آجل</option></select><input id="svcSalesTotal" type="number" placeholder="المبلغ"><input id="svcSalesDate" type="date" value="${new Date().toISOString().split('T')[0]}"><button onclick="saveServiceSalesInvoice()">حفظ</button>`;
+  } else if (type === 'serviceSalesReturn') {
+    html = `<h3>مرتجع بيع خدمات</h3><input id="retSvcSalesDesc" placeholder="وصف الخدمة"><input id="retSvcSalesCustName" placeholder="اسم العميل"><div id="retSvcSalesAccountSelector">${renderAccountSelectorHTML('4200', '', 'حساب الإيراد')}</div><input id="retSvcSalesTotal" type="number" placeholder="المبلغ المرتجع"><input id="retSvcSalesDate" type="date" value="${new Date().toISOString().split('T')[0]}"><button onclick="saveServiceSalesReturn()">حفظ</button>`;
+  } else if (type === 'contract') {
+    const c = id ? AppData.contracts.find(x => x.id === id) : null;
+    html = `<h3>${id ? 'تعديل عقد' : 'عقد جديد'}</h3><input id="contractTitle" placeholder="عنوان العقد" value="${c?.title||''}"><input id="contractParty" placeholder="الطرف المتعاقد" value="${c?.party||''}"><select id="contractType" onchange="toggleNewContractType()">${AppData.contractTypes.map(ct => `<option value="${ct}" ${c?.type===ct?'selected':''}>${ct}</option>`).join('')}<option value="__new__">➕ إضافة نوع جديد</option></select><input id="newContractType" placeholder="اسم النوع الجديد" style="display:none; margin-top:4px;"><input id="contractTotal" type="number" placeholder="إجمالي العقد" value="${c?.totalAmount||''}"><div id="contractAccountSelector">${renderAccountSelectorHTML('2210', c?.account||'')}</div><input type="hidden" id="editId" value="${id||''}"><button onclick="saveContract()">حفظ</button>`;
+  } else if (type === 'asset') {
+    const a = id ? AppData.assets.find(x => x.id === id) : null;
+    html = `<h3>${id ? 'تعديل أصل' : 'أصل جديد'}</h3><input id="assetName" placeholder="اسم الأصل" value="${a?.name||''}"><div id="assetAccountSelector">${renderAccountSelectorHTML('1220', a?.account||'')}</div><input type="hidden" id="editId" value="${id||''}"><button onclick="saveAsset()">حفظ</button>`;
+  } else if (type === 'maintenance') {
+    html = `<h3>تسجيل صيانة</h3><select id="maintAsset">${AppData.assets.map(a => `<option value="${a.id}">${a.name}</option>`).join('')}</select><input id="maintDesc" placeholder="وصف الصيانة"><input id="maintCost" type="number" placeholder="التكلفة"><input id="maintDate" type="date" value="${new Date().toISOString().split('T')[0]}"><button onclick="saveMaintenance()">حفظ</button>`;
+  } else if (type === 'training') {
+    const t = id ? AppData.training.find(x => x.id === id) : null;
+    html = `<h3>${id ? 'تعديل دورة' : 'دورة تدريبية جديدة'}</h3><input id="trainTitle" placeholder="عنوان الدورة" value="${t?.title||''}"><input id="trainDate" type="date" value="${t?.date||''}"><textarea id="trainDesc" placeholder="وصف الدورة">${t?.description||''}</textarea><input id="trainTrainer" placeholder="اسم المدرب" value="${t?.trainer||''}"><input id="trainCost" type="number" placeholder="تكلفة الدورة" value="${t?.cost||''}"><div id="trainAccountSelector">${renderAccountSelectorHTML('5600', t?.expenseAccount||'')}</div><label style="margin-top:10px;">📁 إضافة وسائط تدريبية (يمكنك اختيار عدة ملفات):</label><input type="file" id="trainMediaFiles" multiple accept="video/*,image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"><small>اختر ملفًا واحدًا أو أكثر (فيديو، صورة، مستند).</small><input type="hidden" id="editId" value="${id||''}"><button onclick="saveTraining()">حفظ</button>`;
+  } else if (type === 'knowledge') {
+    const k = id ? AppData.knowledge.find(x => x.id === id) : null;
+    html = `<h3>${id ? 'تعديل ملاحظة' : 'ملاحظة جديدة'}</h3><textarea id="knowContent" placeholder="المحتوى">${k?.content||''}</textarea><input id="knowTags" placeholder="وسوم (مفصولة بفواصل)" value="${k?.tags||''}"><input type="hidden" id="editId" value="${id||''}"><button onclick="saveKnowledge()">حفظ</button>`;
+  }
+  content.innerHTML = html + '<br><button class="secondary" onclick="closeModal()">إلغاء</button>';
+  modal.classList.add('active');
+}
+
+function closeModal() { document.getElementById('genericModal').classList.remove('active'); }
+
+// دوال مساعدة
+function toggleNewItemFields() { const s = document.getElementById('purItemSelect'); const f = document.getElementById('newItemFields'); if(f) f.style.display = s && s.value==='new' ? 'block' : 'none'; }
+function toggleNewSalesItemFields() { const s = document.getElementById('salesItemSelect'); const f = document.getElementById('newSalesItemFields'); if(f) f.style.display = s && s.value==='new' ? 'block' : 'none'; }
+function toggleNewContractType() { const s = document.getElementById('contractType'); const i = document.getElementById('newContractType'); if(i) i.style.display = s && s.value==='__new__' ? 'block' : 'none'; }    // ======================== دوال الحفظ (مع إضافة createdAt تلقائياً) ========================
+    function encodeImage(input) {
+      if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          document.getElementById('empImageData').value = e.target.result;
+          const preview = document.getElementById('empImagePreview');
+          preview.src = e.target.result; preview.style.display = 'block';
+        };
+        reader.readAsDataURL(input.files[0]);
+      }
+    }
+
+    function saveTreasuryMovement() {
+      const type = document.getElementById('movType').value; const amount = parseFloat(document.getElementById('movAmount').value);
+      const desc = document.getElementById('movDesc').value.trim(); const account = getSelectedAccount(document.getElementById('movAccountSelector'));
+      if (!amount || !account) return;
+      addTreasuryMovement(type, amount, desc, account);
+      genJE(type==='مقبوضات'?account:'1210', type==='مقبوضات'?'1210':account, amount, desc);
+      saveData(); closeModal(); renderContent(); showToast('تمت الحركة');
+    }
+
+    function saveCheck() {
+      const id = document.getElementById('chkId').value;
+      const data = { checkNumber: document.getElementById('chkNumber').value.trim(), bankId: document.getElementById('chkBank').value, type: document.getElementById('chkType').value, amount: parseFloat(document.getElementById('chkAmount').value), dueDate: document.getElementById('chkDueDate').value, status: 'مستحق', relatedAccount: getSelectedAccount(document.getElementById('chkAccountSelector')), date: new Date().toISOString().slice(0,10) };
+      if (data.type === 'مستلم') data.from = document.getElementById('chkFromTo').value.trim(); else data.to = document.getElementById('chkFromTo').value.trim();
+      if (!data.checkNumber || !data.bankId || isNaN(data.amount) || !data.relatedAccount) return;
+      if (id) { const c = AppData.checks.find(x => x.id === id); if (c) Object.assign(c, data); }
+      else AppData.checks.push({ id: 'chk'+Date.now(), ...data });
+      saveData(); closeModal(); renderContent(); showToast(id?'تم التعديل':'تمت الإضافة');
+    }
+
+    function saveBank() {
+      const name = document.getElementById('bankName').value.trim(); const account = getSelectedAccount(document.getElementById('bankAccountSelector'));
+      const id = document.getElementById('editId').value;
+      if (!name || !account) return;
+      if (id) { const b = AppData.banks.find(x => x.id === id); if (b) { b.name=name; b.account=account; } }
+      else AppData.banks.push({ id: 'bank'+Date.now(), name, account, createdAt: new Date().toISOString().slice(0,10) });
+      saveData(); closeModal(); renderContent(); showToast(id?'تم التعديل':'تمت الإضافة');
+    }
+
+    function saveBankTransaction() {
+      const bankId = document.getElementById('btBankId').value; const type = document.getElementById('btType').value;
+      const amount = parseFloat(document.getElementById('btAmount').value); const desc = document.getElementById('btDesc').value.trim();
+      if (!amount) return;
+      addBankTransaction(bankId, type, amount, desc, '1210');
+      if (type === 'إيداع') { addTreasuryMovement('مقبوضات', amount, desc + ' (إيداع بنكي)', '1210'); genJE('1210', '1210', amount, desc); }
+      else { addTreasuryMovement('مدفوعات', amount, desc + ' (سحب بنكي)', '1210'); genJE('1210', '1210', amount, desc); }
+      saveData(); closeModal(); renderContent(); showToast('تمت الحركة البنكية');
+    }
+
+    function saveBankReconciliation() {
+      const bankId = document.getElementById('recBankId').value;
+      const actualBalance = parseFloat(document.getElementById('recActualBalance').value);
+      const bankFees = parseFloat(document.getElementById('recBankFees').value) || 0;
+      const bankRevenue = parseFloat(document.getElementById('recBankRevenue').value) || 0;
+      const desc = document.getElementById('recDesc').value.trim() || new Date().toISOString().split('T')[0];
+      if (isNaN(actualBalance)) return showToast('يرجى إدخال الرصيد الفعلي');
+      const bank = AppData.banks.find(b => b.id === bankId);
+      const bookBalance = AppData.bankTransactions.filter(t => t.bankId === bankId).reduce((s, t) => s + (t.type === 'إيداع' ? t.amount : -t.amount), 0);
+      const difference = actualBalance - bookBalance;
+      AppData.bankReconciliations.push({ id: 'rec'+Date.now(), bankId, date: new Date().toISOString().split('T')[0], actualBalance, bookBalance, difference, bankFees, bankRevenue, desc });
+      if (bankFees > 0) { genJE('5800', bank.account, bankFees, 'مصروفات بنكية - ' + desc); addTreasuryMovement('مدفوعات', bankFees, 'مصروفات بنكية - ' + desc, '5800'); }
+      if (bankRevenue > 0) { genJE(bank.account, '4200', bankRevenue, 'إيرادات بنكية - ' + desc); addTreasuryMovement('مقبوضات', bankRevenue, 'إيرادات بنكية - ' + desc, '4200'); }
+      if (Math.abs(difference - (bankRevenue - bankFees)) > 0.001) {
+        const unexplained = difference - (bankRevenue - bankFees);
+        if (unexplained > 0) { genJE(bank.account, '4200', unexplained, 'فروقات تسوية غير مفسرة - ' + desc); addTreasuryMovement('مقبوضات', unexplained, 'فروقات تسوية بنكية', '4200'); }
+        else { genJE('5800', bank.account, Math.abs(unexplained), 'فروقات تسوية غير مفسرة - ' + desc); addTreasuryMovement('مدفوعات', Math.abs(unexplained), 'فروقات تسوية بنكية', '5800'); }
+      }
+      saveData(); closeModal(); renderContent(); showToast('تمت التسوية وتسجيل القيود');
+    }
+
+    function savePersonnel() {
+      const name = document.getElementById('empName').value.trim(); const account = getSelectedAccount(document.getElementById('empAccountSelector'));
+      const id = document.getElementById('editId').value;
+      if (!name || !account) return;
+      const data = { name, account, phone: document.getElementById('empPhone').value.trim(), address: document.getElementById('empAddress').value.trim(), nationalId: document.getElementById('empNationalId').value.trim(), birthDate: document.getElementById('empBirthDate').value, startDate: document.getElementById('empStartDate').value, contractEndDate: document.getElementById('empContractEnd').value, vacationDays: parseInt(document.getElementById('empVacation').value)||0, image: document.getElementById('empImageData').value };
+      if (id) { const emp = AppData.personnel.find(x => x.id === id); if (emp) Object.assign(emp, data, { totalAccrued: emp.totalAccrued, totalPaid: emp.totalPaid }); }
+      else AppData.personnel.push({ id:'emp'+Date.now(), ...data, totalAccrued:0, totalPaid:0, createdAt: new Date().toISOString().slice(0,10) });
+      saveData(); closeModal(); renderContent(); showToast(id?'تم التعديل':'تمت الإضافة');
+    }
+
+    function saveProject() {
+      const name = document.getElementById('projName').value.trim(); const budget = parseFloat(document.getElementById('projBudget').value);
+      const location = document.getElementById('projLocation').value.trim(); const crop = document.getElementById('projCrop').value.trim();
+      const budgetAccount = getSelectedAccount(document.getElementById('projBudgetAccountSelector'));
+      const produceStoreAccount = getSelectedAccount(document.getElementById('projStoreAccountSelector'));
+      const id = document.getElementById('editId').value;
+      if (!name || isNaN(budget) || !budgetAccount || !produceStoreAccount) return;
+      const createProduceItem = (project) => { AppData.inventory = AppData.inventory.filter(item => item.projectId !== project.id); AppData.inventory.push({ id: 'inv-prod-'+project.id, name: project.crop+' طازج', category: 'إنتاج جاهز', quantity: 0, unit: 'كجم', expenseAccount: project.produceStoreAccount, expiryDate: '', projectId: project.id, createdAt: new Date().toISOString().slice(0,10) }); };
+      if (id) { const p = AppData.projects.find(x => x.id === id); if (p) { p.name=name; p.budget=budget; p.location=location; p.crop=crop; p.budgetAccount=budgetAccount; p.produceStoreAccount=produceStoreAccount; createProduceItem(p); } }
+      else { const newProject = { id:'p'+Date.now(), name, budget, location, crop, budgetAccount, produceStoreAccount, phases:[], risks:[], kpis:[{ id:'kpi1', name:'تقدم المهام', value:0, unit:'%' },{ id:'kpi2', name:'الميزانية المتبقية', value:100, unit:'%' }], createdAt: new Date().toISOString().slice(0,10) }; AppData.projects.push(newProject); createProduceItem(newProject); }
+      saveData(); closeModal(); renderContent(); showToast(id?'تم التعديل':'تمت الإضافة');
+    }
+
+    function saveInventory() {
+      const name = document.getElementById('invName').value.trim(); const category = document.getElementById('invCategory').value;
+      const quantity = parseFloat(document.getElementById('invQty').value); const unit = document.getElementById('invUnit').value.trim();
+      const expiryDate = document.getElementById('invExpiry').value; const expenseAccount = getSelectedAccount(document.getElementById('invAccountSelector'));
+      const id = document.getElementById('editId').value;
+      if (!name || !expenseAccount || isNaN(quantity)) return;
+      if (id) { const inv = AppData.inventory.find(x => x.id === id); if (inv) { inv.name=name; inv.category=category; inv.quantity=quantity; inv.unit=unit; inv.expiryDate=expiryDate; inv.expenseAccount=expenseAccount; } }
+      else AppData.inventory.push({ id:'inv'+Date.now(), name, category, quantity, unit, expiryDate, expenseAccount, createdAt: new Date().toISOString().slice(0,10) });
+      saveData(); closeModal(); renderContent(); showToast(id?'تم التعديل':'تمت الإضافة');
+    }
+
+    function saveTask() {
+      const title = document.getElementById('taskTitle').value.trim(); const cost = parseFloat(document.getElementById('taskCost').value) || 0;
+      const projectId = document.getElementById('taskProject').value || null; const phaseId = document.getElementById('taskPhase').value || null;
+      const personId = document.getElementById('taskEmployee').value || null; const id = document.getElementById('editId').value;
+      const date = document.getElementById('taskDate').value || new Date().toISOString().slice(0,10);
+      if (!title) return;
+      const project = AppData.projects.find(p => p.id === projectId); const person = AppData.personnel.find(e => e.id === personId);
+      if (id) { const t = AppData.tasks.find(x => x.id === id); if (t) { t.title=title; t.cost=cost; t.projectId=projectId; t.phaseId=phaseId; t.personId=personId; t.date=date; t.projectName=project?.name||''; t.personName=person?.name||''; } }
+      else AppData.tasks.push({ id:'t'+Date.now(), title, cost, projectId, phaseId, personId, done:false, date, projectName:project?.name||'', personName:person?.name||'', createdAt: new Date().toISOString().slice(0,10) });
+      saveData(); closeModal(); renderContent(); showToast(id?'تم التعديل':'تمت الإضافة');
+    }
+
+    function saveCalendar() {
+      const projectId = document.getElementById('calProject').value; const area = document.getElementById('calArea').value;
+      const plantDate = document.getElementById('calPlantDate').value; const project = AppData.projects.find(p => p.id === projectId);
+      if (!project || !plantDate) return;
+      const operations = [];
+      project.phases.forEach(phase => {
+        const opCount = parseInt(prompt(`كم عملية تريد إضافتها لمرحلة "${phase.name}"؟`, '1'));
+        if (opCount > 0) {
+          const start = new Date(phase.start); const end = new Date(phase.end);
+          const duration = (end - start) / (1000 * 60 * 60 * 24); const interval = duration / opCount;
+          for (let i = 0; i < opCount; i++) {
+            const opDate = new Date(start); opDate.setDate(start.getDate() + Math.round(i * interval));
+            const desc = prompt(`وصف العملية ${i + 1} لمرحلة "${phase.name}":`, `عملية ${phase.name} - ${i + 1}`);
+            const cost = parseFloat(prompt(`تكلفة العملية (دولار):`, '0'));
+            operations.push({ date: opDate.toISOString().split('T')[0], desc: desc || `عملية ${phase.name}`, cost: cost || 0, done: false, phaseId: phase.id, personId: AppData.personnel[0]?.id || null });
+          }
+        }
+      });
+      AppData.calendarEntries.push({ id:'cal'+Date.now(), projectId, crop: project.crop, area, plantDate, operations, createdAt: new Date().toISOString().slice(0,10) });
+      saveData(); closeModal(); renderContent(); showToast('تم إنشاء الروزنامة');
+    }
+
+    function saveSupplier() {
+      const name = document.getElementById('supName').value.trim(); const account = getSelectedAccount(document.getElementById('supAccountSelector'));
+      const id = document.getElementById('editId').value;
+      if (!name || !account) return;
+      if (id) { const s = AppData.suppliers.find(x => x.id === id); if (s) { s.name = name; s.account = account; } }
+      else AppData.suppliers.push({ id: 'sup' + Date.now(), name, account, createdAt: new Date().toISOString().slice(0,10) });
+      saveData(); closeModal(); renderContent(); showToast(id ? 'تم التعديل' : 'تمت الإضافة');
+    }
+
+    function savePurchaseInvoice() {
+      const supplierId = document.getElementById('purSupplier').value; const itemSelect = document.getElementById('purItemSelect').value;
+      const quantity = parseFloat(document.getElementById('purQty').value); const price = parseFloat(document.getElementById('purPrice').value);
+      const date = document.getElementById('purDate').value;
+      if (!supplierId || isNaN(quantity) || isNaN(price)) return;
+      let itemId;
+      if (itemSelect === 'new') {
+        const name = document.getElementById('newItemName').value.trim(); const category = document.getElementById('newItemCategory').value;
+        const unit = document.getElementById('newItemUnit').value.trim(); const expenseAccount = getSelectedAccount(document.getElementById('newItemAccount'));
+        if (!name || !unit || !expenseAccount) return showToast('يرجى إدخال جميع بيانات المادة الجديدة');
+        const newItem = { id: 'inv' + Date.now(), name, category, quantity: 0, unit, expenseAccount, expiryDate: '', createdAt: new Date().toISOString().slice(0,10) };
+        AppData.inventory.push(newItem); itemId = newItem.id; showToast('تم إنشاء المادة الجديدة: ' + name);
+      } else itemId = itemSelect;
+      if (!itemId) return;
+      const total = quantity * price; const item = AppData.inventory.find(i => i.id === itemId);
+      if (item) item.quantity += quantity;
+      AppData.purchaseInvoices.push({ id: 'pi' + Date.now(), date, supplierId, itemId, quantity, price, total });
+      const supplier = AppData.suppliers.find(s => s.id === supplierId);
+      if (supplier && item) genJE(item.expenseAccount || '5100', supplier.account, total, 'شراء ' + item.name);
+      saveData(); closeModal(); renderContent(); showToast('تمت فاتورة الشراء');
+    }
+
+    function savePurchaseReturn() {
+      const supplierId = document.getElementById('retPurSupplier').value; const itemId = document.getElementById('retPurItem').value;
+      const qty = parseFloat(document.getElementById('retPurQty').value); const price = parseFloat(document.getElementById('retPurPrice').value);
+      const date = document.getElementById('retPurDate').value;
+      if (!supplierId || !itemId || isNaN(qty) || isNaN(price)) return;
+      const total = qty * price; const item = AppData.inventory.find(i => i.id === itemId);
+      if (item) item.quantity -= qty;
+      AppData.purchaseReturns.push({ id: 'pr'+Date.now(), date, supplierId, itemId, quantity: qty, price, total });
+      const supplier = AppData.suppliers.find(s => s.id === supplierId);
+      if (supplier && item) genJE(supplier.account, item.expenseAccount || '5100', total, 'مرتجع شراء ' + item.name);
+      saveData(); closeModal(); renderContent(); showToast('تم مرتجع الشراء');
+    }
+
+    function saveSalesInvoice() {
+      const itemSelect = document.getElementById('salesItemSelect').value; const custName = document.getElementById('salesCustName').value.trim();
+      const paymentMethod = document.getElementById('salesPaymentMethod').value; const qty = parseFloat(document.getElementById('salesQty').value);
+      const price = parseFloat(document.getElementById('salesPrice').value); const date = document.getElementById('salesDate').value;
+      if (!itemSelect || isNaN(qty) || isNaN(price)) return;
+      let itemId;
+      if (itemSelect === 'new') {
+        const name = document.getElementById('newSalesItemName').value.trim(); const category = document.getElementById('newSalesItemCategory').value;
+        const unit = document.getElementById('newSalesItemUnit').value.trim(); const expenseAccount = getSelectedAccount(document.getElementById('newSalesItemAccount'));
+        if (!name || !unit || !expenseAccount) return showToast('يرجى إدخال جميع بيانات المادة الجديدة');
+        const newItem = { id: 'inv'+Date.now(), name, category, quantity: 0, unit, expenseAccount, expiryDate: '', createdAt: new Date().toISOString().slice(0,10) };
+        AppData.inventory.push(newItem); itemId = newItem.id; showToast('تم إنشاء المادة الجديدة: ' + name);
+      } else itemId = itemSelect;
+      const total = qty * price; const item = AppData.inventory.find(i => i.id === itemId);
+      if (item) item.quantity -= qty;
+      const custAccount = getSelectedAccount(document.getElementById('salesCustAccountSelector')) || '1210';
+      AppData.salesInvoices.push({ id: 'si'+Date.now(), date, itemId, quantity: qty, price, total, customerName: custName, paymentMethod });
+      if (paymentMethod === 'نقدي') { genJE('1210', '4100', total, 'مبيعات نقدية - ' + (item?.name||'')); addTreasuryMovement('مقبوضات', total, 'مبيعات نقدية', '4100'); }
+      else genJE(custAccount, '4100', total, 'مبيعات آجلة - ' + custName);
+      saveData(); closeModal(); renderContent(); showToast('تمت فاتورة البيع');
+    }
+
+    function saveSalesReturn() {
+      const itemId = document.getElementById('retSalesItem').value; const custName = document.getElementById('retSalesCustName').value.trim();
+      const qty = parseFloat(document.getElementById('retSalesQty').value); const price = parseFloat(document.getElementById('retSalesPrice').value);
+      const date = document.getElementById('retSalesDate').value;
+      if (!itemId || isNaN(qty) || isNaN(price)) return;
+      const total = qty * price; const item = AppData.inventory.find(i => i.id === itemId);
+      if (item) item.quantity += qty;
+      AppData.salesReturns.push({ id: 'sr'+Date.now(), date, itemId, quantity: qty, price, total, customerName: custName });
+      genJE('4100', '1210', total, 'مرتجع مبيعات - ' + (item?.name||'')); addTreasuryMovement('مدفوعات', total, 'مرتجع مبيعات', '1210');
+      saveData(); closeModal(); renderContent(); showToast('تم مرتجع البيع');
+    }
+
+    function saveServicePurchaseInvoice() {
+      const supplierId = document.getElementById('svcPurSupplier').value; const desc = document.getElementById('svcPurDesc').value.trim();
+      const expenseAccount = getSelectedAccount(document.getElementById('svcPurAccountSelector'));
+      const total = parseFloat(document.getElementById('svcPurTotal').value); const date = document.getElementById('svcPurDate').value;
+      if (!supplierId || !desc || !expenseAccount || isNaN(total)) return;
+      const supplier = AppData.suppliers.find(s => s.id === supplierId);
+      AppData.servicePurchaseInvoices.push({ id: 'spi'+Date.now(), date, supplierId, description: desc, total, expenseAccount });
+      genJE(expenseAccount, supplier.account, total, 'شراء خدمات: ' + desc);
+      saveData(); closeModal(); renderContent(); showToast('تمت فاتورة شراء الخدمات');
+    }
+
+    function saveServicePurchaseReturn() {
+      const supplierId = document.getElementById('retSvcPurSupplier').value; const desc = document.getElementById('retSvcPurDesc').value.trim();
+      const expenseAccount = getSelectedAccount(document.getElementById('retSvcPurAccountSelector'));
+      const total = parseFloat(document.getElementById('retSvcPurTotal').value); const date = document.getElementById('retSvcPurDate').value;
+      if (!supplierId || !desc || !expenseAccount || isNaN(total)) return;
+      const supplier = AppData.suppliers.find(s => s.id === supplierId);
+      AppData.servicePurchaseReturns.push({ id: 'spr'+Date.now(), date, supplierId, description: desc, total, expenseAccount });
+      genJE(supplier.account, expenseAccount, total, 'مرتجع شراء خدمات: ' + desc);
+      saveData(); closeModal(); renderContent(); showToast('تم مرتجع شراء الخدمات');
+    }
+
+    function saveServiceSalesInvoice() {
+      const desc = document.getElementById('svcSalesDesc').value.trim(); const custName = document.getElementById('svcSalesCustName').value.trim();
+      const incomeAccount = getSelectedAccount(document.getElementById('svcSalesAccountSelector'));
+      const paymentMethod = document.getElementById('svcSalesPaymentMethod').value;
+      const total = parseFloat(document.getElementById('svcSalesTotal').value); const date = document.getElementById('svcSalesDate').value;
+      if (!desc || !incomeAccount || isNaN(total)) return;
+      const custAccount = paymentMethod === 'نقدي' ? '1210' : addSubAccount('1230', custName || 'عميل', 'مدين');
+      AppData.serviceSalesInvoices.push({ id: 'ssi'+Date.now(), date, description: desc, total, customerName: custName, paymentMethod, incomeAccount });
+      genJE(custAccount, incomeAccount, total, 'بيع خدمات: ' + desc);
+      if (paymentMethod === 'نقدي') addTreasuryMovement('مقبوضات', total, 'بيع خدمات نقدي', incomeAccount);
+      saveData(); closeModal(); renderContent(); showToast('تمت فاتورة بيع الخدمات');
+    }
+
+    function saveServiceSalesReturn() {
+      const desc = document.getElementById('retSvcSalesDesc').value.trim(); const custName = document.getElementById('retSvcSalesCustName').value.trim();
+      const incomeAccount = getSelectedAccount(document.getElementById('retSvcSalesAccountSelector'));
+      const total = parseFloat(document.getElementById('retSvcSalesTotal').value); const date = document.getElementById('retSvcSalesDate').value;
+      if (!desc || !incomeAccount || isNaN(total)) return;
+      AppData.serviceSalesReturns.push({ id: 'ssr'+Date.now(), date, description: desc, total, customerName: custName, incomeAccount });
+      genJE(incomeAccount, '1210', total, 'مرتجع بيع خدمات: ' + desc);
+      addTreasuryMovement('مدفوعات', total, 'مرتجع بيع خدمات', '1210');
+      saveData(); closeModal(); renderContent(); showToast('تم مرتجع بيع الخدمات');
+    }
+
+    function saveContract() {
+      const title = document.getElementById('contractTitle').value.trim(); const party = document.getElementById('contractParty').value.trim();
+      const typeSelect = document.getElementById('contractType').value; let type = typeSelect;
+      if (typeSelect === '__new__') { type = document.getElementById('newContractType').value.trim(); if (type && !AppData.contractTypes.includes(type)) addContractType(type); }
+      const totalAmount = parseFloat(document.getElementById('contractTotal').value); const account = getSelectedAccount(document.getElementById('contractAccountSelector'));
+      const id = document.getElementById('editId').value;
+      if (!title || !type || !account || isNaN(totalAmount)) return;
+      if (id) { const c = AppData.contracts.find(x => x.id === id); if (c) { c.title=title; c.party=party; c.type=type; c.totalAmount=totalAmount; c.account=account; } }
+      else AppData.contracts.push({ id: 'ctr'+Date.now(), title, party, type, totalAmount, paid: 0, account, createdAt: new Date().toISOString().slice(0,10) });
+      saveData(); closeModal(); renderContent(); showToast(id?'تم التعديل':'تمت الإضافة');
+    }
+
+    function saveAsset() {
+      const name = document.getElementById('assetName').value.trim(); const account = getSelectedAccount(document.getElementById('assetAccountSelector'));
+      const id = document.getElementById('editId').value;
+      if (!name || !account) return;
+      const maintenanceAccount = addSubAccount('5400', 'صيانة-'+name, 'صيانة');
+      if (id) { const a = AppData.assets.find(x => x.id === id); if (a) { a.name=name; a.account=account; a.maintenanceAccount=maintenanceAccount; } }
+      else AppData.assets.push({ id: 'ast'+Date.now(), name, account, maintenanceAccount, createdAt: new Date().toISOString().slice(0,10) });
+      saveData(); closeModal(); renderContent(); showToast(id?'تم التعديل':'تمت الإضافة');
+    }
+
+    function saveMaintenance() {
+      const assetId = document.getElementById('maintAsset').value; const desc = document.getElementById('maintDesc').value.trim();
+      const cost = parseFloat(document.getElementById('maintCost').value); const date = document.getElementById('maintDate').value;
+      if (!assetId || !desc || isNaN(cost)) return;
+      const asset = AppData.assets.find(a => a.id === assetId);
+      AppData.maintenanceLog.push({ id: 'm'+Date.now(), assetId, date, desc, cost });
+      if (asset) genJE(asset.maintenanceAccount, '1210', cost, 'صيانة ' + asset.name + ': ' + desc);
+      addTreasuryMovement('مدفوعات', cost, 'صيانة ' + (asset?.name||''), asset?.maintenanceAccount||'5400');
+      saveData(); closeModal(); renderContent(); showToast('تم تسجيل الصيانة');
+    }
+
+    function saveTraining() {
+      const title = document.getElementById('trainTitle').value.trim(); const date = document.getElementById('trainDate').value;
+      const description = document.getElementById('trainDesc').value.trim(); const trainer = document.getElementById('trainTrainer').value.trim();
+      const cost = parseFloat(document.getElementById('trainCost').value) || 0; const expenseAccount = getSelectedAccount(document.getElementById('trainAccountSelector'));
+      const id = document.getElementById('editId').value;
+      if (!title) return;
+      let trainingId;
+      if (id) { const t = AppData.training.find(x => x.id === id); if (t) { t.title=title; t.date=date; t.description=description; t.trainer=trainer; t.cost=cost; t.expenseAccount=expenseAccount; } trainingId = id; }
+      else { trainingId = 'tr' + Date.now(); AppData.training.push({ id: trainingId, title, date, description, trainer, cost, expenseAccount, createdAt: new Date().toISOString().slice(0,10) }); }
+      const files = document.getElementById('trainMediaFiles').files;
+      if (files && files.length > 0) {
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            const dataUrl = e.target.result;
+            let mediaType = 'document';
+            if (file.type.startsWith('image/')) mediaType = 'image';
+            else if (file.type.startsWith('video/')) mediaType = 'video';
+            addTrainingMedia(trainingId, mediaType, dataUrl, file.name);
+          };
+          reader.readAsDataURL(file);
+        }
+      }
+      if (expenseAccount && cost > 0) { genJE(expenseAccount, '1210', cost, 'تدريب: ' + title); addTreasuryMovement('مدفوعات', cost, 'تدريب: ' + title, expenseAccount); }
+      saveData(); closeModal(); renderContent(); showToast(id ? 'تم تعديل الدورة وحفظ الوسائط' : 'تمت إضافة الدورة مع الوسائط');
+    }
+
+    function saveKnowledge() {
+      const content = document.getElementById('knowContent').value.trim(); const tags = document.getElementById('knowTags').value.trim();
+      const id = document.getElementById('editId').value;
+      if (!content) return;
+      if (id) { const k = AppData.knowledge.find(x => x.id === id); if (k) { k.content=content; k.tags=tags; } }
+      else AppData.knowledge.push({ id: 'k'+Date.now(), content, tags, createdAt: new Date().toISOString().slice(0,10) });
+      saveData(); closeModal(); renderContent(); showToast(id?'تم التعديل':'تمت الإضافة');
+    }
+
+    // ======================== بدء التشغيل ========================
+    window.onload = function () {
+      loadData();
+      renderTabs();
+      renderContent();
+    };
+  </script>
+</body>
+</html>
